@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 import re
 
 # Set page layout to wide for better visualization room
-st.set_page_config(page_title="Coke Canada Market Mapper", layout="wide")
+st.set_page_config(page_title="Market Landscape Mapper", layout="wide")
 
-st.title("🥤 Coca-Cola Canada Market Mapper")
-st.markdown("Upload raw survey microdata to instantly weight it to Statistics Canada population targets and view your competitive landscape.")
+st.title("📊 Advanced Market Landscape Mapper")
+st.markdown("Upload raw survey microdata to instantly weight it to regional/demographic population targets and view your competitive landscape.")
 
 # =====================================================================
 # SIDEBAR: FILE UPLOAD & PRESETS
@@ -16,9 +16,9 @@ st.markdown("Upload raw survey microdata to instantly weight it to Statistics Ca
 st.sidebar.header("1. Upload Data")
 uploaded_file = st.sidebar.file_uploader("Upload Raw Respondent Data (.csv or .xlsx)", type=["csv", "xlsx"])
 
-# Pre-coded Statistics Canada Population Targets (2026 Estimates)
-STATCAN_REGIONS = {"Ontario": 0.385, "Quebec": 0.223, "British Columbia": 0.135, "Alberta": 0.117, "Prairies": 0.075, "Atlantic": 0.065}
-STATCAN_AGE = {"18-34": 0.270, "35-54": 0.330, "55+": 0.400}
+# Pre-coded Regional/Demographic Population Targets (National Estimates)
+REGION_TARGETS = {"Region 1": 0.385, "Region 2": 0.223, "Region 3": 0.135, "Region 4": 0.117, "Region 5": 0.075, "Region 6": 0.065}
+AGE_TARGETS = {"18-34": 0.270, "35-54": 0.330, "55+": 0.400}
 
 # =====================================================================
 # MAIN INTERFACE
@@ -44,17 +44,17 @@ if uploaded_file is not None:
         age_col = st.selectbox("Which column contains the age groups?", [""] + list(df.columns))
         
     with col2:
-        st.subheader("Brand Columns (For the Cross-Tab)")
+        st.subheader("Brand/Product Columns (For the Cross-Tab)")
         brand_cols = st.multiselect("Select all the brand columns (should be 1s and 0s):", list(df.columns))
 
     st.markdown("---")
     
     col3, col4 = st.columns(2)
     with col3:
-        st.info("💡 **Active Core Values:** These are the foundational personal values (like family priority or thriftiness) that will define the shape of your map.")
+        st.info("💡 **Active Core Values:** These are the foundational personal values or core attributes that will define the shape of your map.")
         active_cols = st.multiselect("Select your Active Value columns:", list(df.columns))
     with col4:
-        st.info("💡 **Passive Overlays:** These are things like shopping habits or sub-brand options. They layer on top without distorting the layout.")
+        st.info("💡 **Passive Overlays:** These are things like secondary behaviors, shopping habits, or sub-segments. They layer on top without distorting the layout.")
         passive_cols = st.multiselect("Select your Passive Layer columns:", list(df.columns))
 
     # STEP 2: RUN ALGORITHMS
@@ -68,7 +68,7 @@ if uploaded_file is not None:
             # --- RAKING ALGORITHM ---
             df_weighted = df.copy()
             df_weighted["weight"] = 1.0
-            targets = {region_col: STATCAN_REGIONS, age_col: STATCAN_AGE}
+            targets = {region_col: REGION_TARGETS, age_col: AGE_TARGETS}
             
             for iteration in range(20):
                 for var, var_targets in targets.items():
@@ -115,14 +115,14 @@ if uploaded_file is not None:
             
             # --- RENDERING OUTPUT RESULTS IN TABS ---
             st.success("Analysis Complete!")
-            tab1, tab2, tab3 = st.tabs(["🗺️ The Landscape Map", "📊 Weighted Crosstab Data", "🧠 Plain English Strategy"])
+            tab1, tab2, tab3 = st.tabs(["🗺️ The Landscape Map", "📊 Weighted Crosstab Data", "🧠 Strategy Insights"])
             
             with tab1:
                 st.subheader("Your Population-Weighted Competitive Space")
                 fig, ax = plt.subplots(figsize=(12, 10))
                 
                 # Active Rows
-                ax.scatter(row_coords[:, 0], row_coords[:, 1], color='steelblue', marker='o', s=60, label='Core Attitudes')
+                ax.scatter(row_coords[:, 0], row_coords[:, 1], color='steelblue', marker='o', s=60, label='Core Attributes')
                 for i, txt in enumerate(df_active_counts.index):
                     ax.annotate(txt[:25]+'...', (row_coords[i, 0], row_coords[i, 1] + 0.005), color='darkblue', fontsize=9, ha='center')
                     
@@ -137,8 +137,8 @@ if uploaded_file is not None:
                     for i, txt in enumerate(df_passive_counts.index):
                         ax.annotate(txt[:25]+'...', (sup_coords[i, 0], sup_coords[i, 1] - 0.012), color='darkgreen', fontsize=9, ha='center')
                 
-                # Brand Columns
-                ax.scatter(col_coords[:, 0], col_coords[:, 1], color='crimson', marker='s', s=90, label='Brands')
+                # Brand/Product Columns
+                ax.scatter(col_coords[:, 0], col_coords[:, 1], color='crimson', marker='s', s=90, label='Brands/Products')
                 for i, txt in enumerate(brand_cols):
                     ax.annotate(txt, (col_coords[i, 0], col_coords[i, 1] - 0.012), color='darkred', fontsize=11, weight='bold', ha='center')
                 
@@ -167,9 +167,9 @@ if uploaded_file is not None:
             with tab3:
                 st.subheader("How to Interpret Your Results")
                 st.markdown("""
-                *   **Look for Clustered Items:** Brands sitting very close to specific attitudes are over-indexing among those consumers. That is your brand's unique mental ownership space.
-                *   **The Dead Center (0,0):** Items near the absolute intersection of the crosshairs represent the national mainstream average. Brands placed here appeal to everyone generally, but don't hold a distinct identity advantage over one another.
-                *   **The Outliers:** Elements pushed far out toward the edges are your niche opportunities or specialized market segments.
+                * **Look for Clustered Items:** Products sitting very close to specific attributes are over-indexing among those consumers. That is your product's unique mental ownership space.
+                * **The Dead Center (0,0):** Items near the absolute intersection of the crosshairs represent the national mainstream average. Brands placed here appeal to everyone generally, but don't hold a distinct identity advantage over one another.
+                * **The Outliers:** Elements pushed far out toward the edges are your niche opportunities or specialized market segments.
                 """)
 else:
     st.info("◀️ Please upload your raw survey respondent dataset file in the sidebar to begin.")
