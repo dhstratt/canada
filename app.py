@@ -14,9 +14,11 @@ st.title("🎯 Universal Market Segment & Landscape Builder")
 st.markdown("Upload your raw survey data. Build custom segments and crosstabs using every question, attitude, brand, and demographic simultaneously.")
 
 # =====================================================================
-# THE MEGA-CODEBOOK DICTIONARIES
+# THE MEGA-CODEBOOK DICTIONARIES (COMPLETE)
 # =====================================================================
-BRANDS = {1: "Simply", 2: "Minute Maid", 3: "Fruitopia", 4: "Five Alive", 5: "Honest Kids", 6: "Allen's", 7: "Compliments", 8: "Del Monte", 9: "Dole", 10: "Fruité", 11: "Great Value", 12: "Kiju", 13: "Kool-Aid", 14: "Natural One", 15: "Oasis", 16: "Ocean Spray", 17: "President's Choice", 18: "Rougemont", 19: "Rubicon Exotic", 20: "Sunny Delight", 21: "SunRype", 22: "Tradition", 23: "Tropicana", 24: "Irresistible", 25: "Western Family", 26: "Other"}
+CATEGORIES = {"OJxBuyersQuota": "Orange Juice", "ADExBuyersQuota": "Lemonade & Ades", "OtherJuicexBuyersQuota": "Other Fruit Juices/Blends", "LightxBuyersQuota": "Zero/Light/Lower Sugar"}
+P3M_CATS = {1: "Soda/Pop/Cola", 2: "Tea", 3: "Coffee", 4: "Kombucha", 5: "Juice/Lemonade", 6: "Milk", 7: "Flavored water/seltzer", 8: "Sports drinks", 9: "Energy drinks", 10: "Nectars"}
+BRANDS = {1: "Simply", 2: "Minute Maid", 3: "Fruitopia", 4: "Five Alive", 5: "Honest Kids", 6: "Allen's", 7: "Compliments", 8: "Del Monte", 9: "Dole", 10: "Fruité", 11: "Great Value", 12: "Kiju", 13: "Kool-Aid", 14: "Natural One", 15: "Oasis", 16: "Ocean Spray", 17: "President's Choice", 18: "Rougemont", 19: "Rubicon Exotic", 20: "Sunny Delight", 21: "SunRype", 22: "Tradition", 23: "Tropicana", 24: "Irresistible", 25: "Western Family", 26: "None/Other"}
 CHANNELS = {1: "Grocery store", 2: "Ethnic Grocery", 3: "Mass retailer", 4: "Club store", 5: "Convenience store", 6: "Drug store", 7: "Gas station", 8: "Coffee shop", 9: "Deli", 10: "Restaurant", 11: "Other"}
 SIZES = {1: "Large carton", 2: "Single carton", 3: "Large plastic jug", 4: "Can", 5: "Single plastic bottle", 6: "Fountain cup", 7: "Other"}
 WHY_CHOOSE = {1: "Price/Value", 2: "Coupon/Incentive", 3: "Brand Loyalty", 4: "Trial/New", 5: "HH Request", 6: "Availability", 7: "Health Benefit", 8: "Convenience", 9: "Other"}
@@ -29,6 +31,12 @@ KIDS_ATTITUDES = {1: "Healthy option for children", 2: "Feel guilty giving to ch
 BEV_ATTITUDES_1 = {1: "Pay premium for quality", 2: "Simple ingredients", 3: "Cool packaging", 4: "Highly convenient", 5: "Daily routine", 6: "Always next to me", 7: "Sweet drink over sweet food", 8: "Smaller portion of real juice"}
 BEV_ATTITUDES_2 = {1: "Bold/tart kick", 2: "Functional health benefits", 3: "Change depending on season", 4: "Don't worry about sugar", 5: "Strictly avoid added sugars", 6: "Less worried if health benefits", 7: "Actively limit due to sugar", 8: "Only zero-sugar"}
 
+MRI_VALUES = {1: "Wealth", 2: "Adventure", 3: "Ambition", 4: "Thrift", 5: "Social responsibility", 6: "Excitement", 7: "Simplicity", 8: "Curiosity", 9: "Creativity", 10: "Enjoying life", 11: "Working hard", 12: "Duty"}
+LOYALTY_APPROACH = {1: "Loyal to one brand", 2: "Choose between familiar brands", 3: "Always exploring new brands", 4: "Choose least expensive", 5: "None of the above"}
+PURCHASE_DRIVERS = {1: "Taste", 2: "Added nutritional benefits", 3: "Brand", 4: "Low sugar content", 5: "No sugar added", 6: "Total Price", 7: "Price per mL/ounce", 8: "Added functional benefits", 9: "Largest-size container", 10: "Smallest-size container", 11: "Medium-size container", 12: "Easy to pour", 13: "Low calorie content", 14: "Level of pulp / Flavor", 15: "Fun packaging / Natural ingredients", 16: "No high sugar warning", 17: "Not from Concentrate", 18: "Other"}
+RECENT_PURCHASE = {1: "Within last week", 2: "1-2 weeks ago", 3: "2-4 weeks ago", 4: "1-2 months ago", 5: "More than 2 months ago"}
+CONSUMPTION_CHANGE = {1: "Drinking more than a year ago", 2: "Drinking less (changed this year)", 3: "Drinking less (gradual change)", 4: "Stayed about the same"}
+
 PSYCHOGRAPHICS = {
     "Q19_r1": "I thrive at big parties and social occasions", "Q19_r2": "I think of myself as an intellectual", "Q19_r3": "Spending time with my family is my top priority", "Q19_r4": "I am interested in finding out how I can help the environment", "Q19_r5": "I am an optimist", "Q19_r6": "I seek out variety in my everyday life", "Q19_r7": "I make sure I take time for myself each day", "Q19_r8": "I like to learn about foreign cultures", "Q19_r9": "I’m perfectly happy with my standard of living", "Q20_r1": "I like to change brands often for the sake of variety and novelty", "Q20_r2": "I buy based on quality, not price", "Q20_r3": "Price is more important to me than brand names", "Q20_r4": "Generic or store brand products are as effective as brand-name products", "Q20_r5": "I enjoy wandering the store looking for new, interesting products", "Q20_r6": "I tend to make impulse purchases", "Q20_r7": "My children have significant impact on the brands I choose", "Q20_r8": "I buy brands that reflect my style", "Q20_r9": "I am influenced by what's hot and what's not", "Q21_r1": "I prefer foods cooked with bold flavors", "Q21_r2": "Nutritional value is the most important factor when I'm choosing which foods to eat", "Q21_r3": "I eat the foods I like regardless of calories", "Q21_r4": "I believe in a healthy lifestyle instead of traditional dieting", "Q21_r5": "Food is a comfort to me", "Q21_r6": "I indulge my cravings for foods I enjoy", "Q21_r7": "I am loyal to my food brands and stick with them", "Q21_r8": "Fast food is junk food", "Q21_r9": "I prefer to eat foods without artificial ingredients", "Q21_r10": "I try to eat a healthy breakfast every day", "Q22_r1": "I am generally more fit and active than other people my age", "Q22_r2": "I frequently look for new ways to change up my exercise routine", "Q22_r3": "I regularly look for ways to get a better night’s sleep", "Q22_r4": "Because of my busy lifestyle, I don’t take care of myself as well as I should", "Q22_r5": "The health claims/benefits on a product package often influence my decision to buy it", "Q22_r6": "Taking care of your mental health is a critical part of your overall wellness", "Q22_r7": "I always do what my doctor tells me to do", "Q22_r8": "I consider my diet to be very healthy"
 }
@@ -40,15 +48,11 @@ DEMO_MAP = {
     "D1": {1: "Gender: Female", 2: "Gender: Male", 3: "Gender: Non-Binary"},
     "D3": {1: "Marital: Single", 2: "Marital: Married", 3: "Marital: Living with Partner", 4: "Marital: Divorced", 5: "Marital: Separated", 6: "Marital: Widowed"},
     "D5": {1: "Income: <$25k", 2: "Income: $25k-$50k", 3: "Income: $50k-$75k", 4: "Income: $75k-$100k", 5: "Income: $100k-$150k", 6: "Income: $150k-$200k", 7: "Income: $200k+"},
+    "D6": {1: "Ethnicity: Asian", 2: "Ethnicity: Arab", 3: "Ethnicity: Black", 4: "Ethnicity: Caucasian/White", 5: "Ethnicity: Latin American", 6: "Ethnicity: Jewish", 7: "Ethnicity: Indigenous", 8: "Ethnicity: Other"},
     "D8": {1: "Immigration: 1st Gen", 2: "Immigration: 1.5 Gen", 3: "Immigration: 2nd Gen", 4: "Immigration: 3rd Gen"},
     "D10": {1: "Edu: Bachelor's", 2: "Edu: High School", 3: "Edu: College Diploma", 4: "Edu: Master's", 8: "Edu: Doctorate"},
     "D11": {1: "Employ: Full Time", 2: "Employ: Part Time", 4: "Employ: Student", 5: "Employ: Homemaker", 7: "Employ: Retired"}
 }
-
-# Variable Type Lists for UI Organization
-PSYCHO_VARS = list(PSYCHOGRAPHICS.values())
-BRAND_VARS = list(BRANDS.values())
-DEMO_VARS = [val for subdict in DEMO_MAP.values() for val in subdict.values()]
 
 SCALE_OPTIONS = [
     "Exact Match / YES (Binary)",
@@ -80,88 +84,92 @@ def load_and_prep_data(file):
             for val, label in value_map.items():
                 df_clean[f"[Demo] {label}"] = (df[col] == val).astype(int)
 
-    # 2. Brands Purchased (Q1)
-    for b_idx, b_name in BRANDS.items():
-        col = f"Q1_{b_idx}"
-        if col in df.columns:
-            df_clean[f"[Brand] Purchased: {b_name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+    # 2. Categories (Quotas & P3M)
+    for q_code, label in CATEGORIES.items():
+        if q_code in df.columns: df_clean[f"[Category] Buyer: {label}"] = pd.to_numeric(df[q_code], errors='coerce').fillna(0).astype(int)
+    for c_idx, c_name in P3M_CATS.items():
+        col = f"S6_r{c_idx}_c1" # c1 = Self
+        if col in df.columns: df_clean[f"[Category] P3M Self: {c_name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
 
-    # 3. Channels (Q2: r=Channel, c=Brand)
+    # 3. Brands (Q1, Q4, Q5, Q7 Rejectors)
+    for b_idx, b_name in BRANDS.items():
+        if f"Q1_{b_idx}" in df.columns: df_clean[f"[Brand] Purchased: {b_name}"] = pd.to_numeric(df[f"Q1_{b_idx}"], errors='coerce').fillna(0).astype(int)
+        if f"Q4_{b_idx}" in df.columns: df_clean[f"[Rejectors/Favs] HH Favorite: {b_name}"] = pd.to_numeric(df[f"Q4_{b_idx}"], errors='coerce').fillna(0).astype(int)
+        if f"Q5_{b_idx}" in df.columns: df_clean[f"[Brand] Most Recent Purch: {b_name}"] = pd.to_numeric(df[f"Q5_{b_idx}"], errors='coerce').fillna(0).astype(int)
+        if f"Q7_{b_idx}" in df.columns: df_clean[f"[Rejectors/Favs] Never Consider: {b_name}"] = pd.to_numeric(df[f"Q7_{b_idx}"], errors='coerce').fillna(0).astype(int)
+
+    # 4. Brand Varieties (Q8)
+    q8_cols = [c for c in df.columns if c.startswith('Q8_')]
+    for col in q8_cols:
+        parts = col.replace('Q8_', '').split('.')
+        if len(parts) == 2 and parts[1].isdigit():
+            b_idx = int(parts[1])
+            b_name = BRANDS.get(b_idx, "Unknown")
+            df_clean[f"[Brand] Variety code {parts[0]} - {b_name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+
+    # 5. Channels (Q2)
     for c_idx, c_name in CHANNELS.items():
         for b_idx, b_name in BRANDS.items():
-            col = f"Q2_r{c_idx}_c{b_idx}"
-            if col in df.columns:
-                df_clean[f"[Channel] {c_name} - {b_name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+            if f"Q2_r{c_idx}_c{b_idx}" in df.columns: df_clean[f"[Channel] {c_name} - {b_name}"] = pd.to_numeric(df[f"Q2_r{c_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
 
-    # 4. Sizes (Q3: r=Size, c=Brand)
+    # 6. Sizes (Q3)
     for s_idx, s_name in SIZES.items():
         for b_idx, b_name in BRANDS.items():
-            col = f"Q3_r{s_idx}_c{b_idx}"
-            if col in df.columns:
-                df_clean[f"[Size] {s_name} - {b_name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+            if f"Q3_r{s_idx}_c{b_idx}" in df.columns: df_clean[f"[Size] {s_name} - {b_name}"] = pd.to_numeric(df[f"Q3_r{s_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
 
-    # 5. Why Choose (Q6: _reason.brand)
+    # 7. Why Choose (Q6)
     for w_idx, w_name in WHY_CHOOSE.items():
         for b_idx, b_name in BRANDS.items():
-            col = f"Q6_{w_idx}.{b_idx}"
-            if col in df.columns:
-                df_clean[f"[Why Choose] {w_name} - {b_name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+            if f"Q6_{w_idx}.{b_idx}" in df.columns: df_clean[f"[Why Choose] {w_name} - {b_name}"] = pd.to_numeric(df[f"Q6_{w_idx}.{b_idx}"], errors='coerce').fillna(0).astype(int)
 
-    # 6. Who Drinks (Q9: r=Who, c=Brand)
+    # 8. Who/When/Freq/Reason (Q9, Q9a, Q9b, Q14)
     for w_idx, w_name in WHO_DRINKS.items():
         for b_idx, b_name in BRANDS.items():
-            col = f"Q9_r{w_idx}_c{b_idx}"
-            if col in df.columns:
-                df_clean[f"[Who Drinks] {w_name} - {b_name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
-
-    # 7. When/How (Q9a: r=When, c=Brand)
+            if f"Q9_r{w_idx}_c{b_idx}" in df.columns: df_clean[f"[Who Drinks] {w_name} - {b_name}"] = pd.to_numeric(df[f"Q9_r{w_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
     for w_idx, w_name in WHEN_HOW.items():
         for b_idx, b_name in BRANDS.items():
-            col = f"Q9a_r{w_idx}_c{b_idx}"
-            if col in df.columns:
-                df_clean[f"[When/How] {w_name} - {b_name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
-
-    # 8. Frequency (Q9b_c{brand} contains 1-6)
+            if f"Q9a_r{w_idx}_c{b_idx}" in df.columns: df_clean[f"[When/How] {w_name} - {b_name}"] = pd.to_numeric(df[f"Q9a_r{w_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
     for b_idx, b_name in BRANDS.items():
-        col = f"Q9b_c{b_idx}"
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-            for f_idx, f_name in FREQUENCY.items():
-                df_clean[f"[Frequency] {f_name} - {b_name}"] = (df[col] == f_idx).astype(int)
+        if f"Q9b_c{b_idx}" in df.columns:
+            df[f"Q9b_c{b_idx}"] = pd.to_numeric(df[f"Q9b_c{b_idx}"], errors='coerce')
+            for f_idx, f_name in FREQUENCY.items(): df_clean[f"[Frequency] {f_name} - {b_name}"] = (df[f"Q9b_c{b_idx}"] == f_idx).astype(int)
+        if f"Q14_c{b_idx}" in df.columns:
+            df[f"Q14_c{b_idx}"] = pd.to_numeric(df[f"Q14_c{b_idx}"], errors='coerce')
+            for r_idx, r_name in REASONS.items(): df_clean[f"[Reason] {r_name} - {b_name}"] = (df[f"Q14_c{b_idx}"] == r_idx).astype(int)
 
-    # 9. Reasons (Q14_c{brand} contains 1-7)
-    for b_idx, b_name in BRANDS.items():
-        col = f"Q14_c{b_idx}"
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-            for r_idx, r_name in REASONS.items():
-                df_clean[f"[Reason] {r_name} - {b_name}"] = (df[col] == r_idx).astype(int)
+    # 9. Buying Styles (Q5a, Q10-Q12, Q15)
+    for r_idx, r_name in RECENT_PURCHASE.items():
+        cols = [c for c in df.columns if c.startswith('Q5a')]
+        if cols:
+            df_clean[f"[Buying Styles] Recent Purch: {r_name}"] = (pd.to_numeric(df[cols[0]], errors='coerce') == r_idx).astype(int)
+    if 'Q15' in df.columns:
+        for r_idx, r_name in CONSUMPTION_CHANGE.items():
+            df_clean[f"[Buying Styles] Consumption: {r_name}"] = (pd.to_numeric(df['Q15'], errors='coerce') == r_idx).astype(int)
+            
+    q_map = {'Q10': 'OJ', 'Q11': 'Lemonade', 'Q12': 'Other Juice'}
+    for q_code, q_label in q_map.items():
+        if q_code in df.columns:
+            for l_idx, l_name in LOYALTY_APPROACH.items(): df_clean[f"[Buying Styles] Approach to {q_label}: {l_name}"] = (pd.to_numeric(df[q_code], errors='coerce') == l_idx).astype(int)
+        for p_idx, p_name in PURCHASE_DRIVERS.items():
+            if f"{q_code}a_{p_idx}" in df.columns: df_clean[f"[Buying Styles] Adult Driver ({q_label}): {p_name}"] = pd.to_numeric(df[f"{q_code}a_{p_idx}"], errors='coerce').fillna(0).astype(int)
+            if f"{q_code}b_{p_idx}" in df.columns: df_clean[f"[Buying Styles] Kids Driver ({q_label}): {p_name}"] = pd.to_numeric(df[f"{q_code}b_{p_idx}"], errors='coerce').fillna(0).astype(int)
 
-    # 10. Kids Attitudes (Q13 - Retain 1-4 scale)
+    # 10. Core MRI Values (Q18)
+    for v_idx, v_name in MRI_VALUES.items():
+        if f"Q18_{v_idx}" in df.columns: df_clean[f"[Psychographics] Core Value: {v_name}"] = pd.to_numeric(df[f"Q18_{v_idx}"], errors='coerce').fillna(0).astype(int)
+
+    # 11. Scales & Attitudes (Q13, Q16, Q17, Q19-Q22)
     for r_idx, r_name in KIDS_ATTITUDES.items():
-        col = f"Q13_r{r_idx}"
-        if col in df.columns:
-            df_clean[f"[Kids Attitudes] {r_name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-
-    # 11. Bev Attitudes (Q16 and Q16x2)
+        if f"Q13_r{r_idx}" in df.columns: df_clean[f"[Kids Attitudes] {r_name}"] = pd.to_numeric(df[f"Q13_r{r_idx}"], errors='coerce').fillna(0)
     for idx, name in BEV_ATTITUDES_1.items():
-        col = f"Q16_{idx}"
-        if col in df.columns: df_clean[f"[Bev Attitudes] {name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+        if f"Q16_{idx}" in df.columns: df_clean[f"[Bev Attitudes] {name}"] = pd.to_numeric(df[f"Q16_{idx}"], errors='coerce').fillna(0).astype(int)
     for idx, name in BEV_ATTITUDES_2.items():
-        col = f"Q16x2_{idx}"
-        if col in df.columns: df_clean[f"[Bev Attitudes] {name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
-
-    # 12. Brand Attitudes (Q17: r=Statement, c=Brand)
+        if f"Q16x2_{idx}" in df.columns: df_clean[f"[Bev Attitudes] {name}"] = pd.to_numeric(df[f"Q16x2_{idx}"], errors='coerce').fillna(0).astype(int)
     for r_idx, r_name in BRAND_ATTITUDES.items():
         for b_idx, b_name in BRANDS.items():
-            col = f"Q17_r{r_idx}_c{b_idx}"
-            if col in df.columns:
-                df_clean[f"[Brand Attitude] {r_name} - {b_name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
-
-    # 13. Psychographics (Q19-Q22 - Retain 1-4 Scale)
+            if f"Q17_r{r_idx}_c{b_idx}" in df.columns: df_clean[f"[Brand Attitude] {r_name} - {b_name}"] = pd.to_numeric(df[f"Q17_r{r_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
     for q_code, english_stmt in PSYCHOGRAPHICS.items():
-        if q_code in df.columns:
-            df_clean[f"[Psychographics] {english_stmt}"] = pd.to_numeric(df[q_code], errors='coerce').fillna(0)
+        if q_code in df.columns: df_clean[f"[Psychographics] {english_stmt}"] = pd.to_numeric(df[q_code], errors='coerce').fillna(0)
             
     return df_clean
 
@@ -196,7 +204,7 @@ if uploaded_file:
             df_base = load_and_prep_data(uploaded_file)
             is_legacy_state = False
             if 'df_working' in st.session_state:
-                if not any(c.startswith('[Demo]') for c in st.session_state['df_working'].columns):
+                if not any(c.startswith('[Buying Styles]') for c in st.session_state['df_working'].columns):
                     is_legacy_state = True
             
             if 'data_loaded' not in st.session_state or st.session_state.get('file_name') != uploaded_file.name or is_legacy_state:
@@ -207,8 +215,13 @@ if uploaded_file:
             st.sidebar.success(f"Loaded Master File: {len(df_base)} Respondents!")
     
     all_cols = [c for c in st.session_state['df_working'].columns if c != "Weight" and c not in st.session_state['created_segments']]
+    
+    # UI Categories
     CAT_DEMOS = [c for c in all_cols if c.startswith("[Demo]")]
+    CAT_CATEGORIES = [c for c in all_cols if c.startswith("[Category]")]
     CAT_BRANDS = [c for c in all_cols if c.startswith("[Brand]") or c.startswith("[Size]")]
+    CAT_BUYING = [c for c in all_cols if c.startswith("[Buying Styles]")]
+    CAT_FAVS = [c for c in all_cols if c.startswith("[Rejectors/Favs]")]
     CAT_CHANNELS = [c for c in all_cols if c.startswith("[Channel]") or c.startswith("[When/How]") or c.startswith("[Frequency]") or c.startswith("[Who Drinks]")]
     CAT_REASONS = [c for c in all_cols if c.startswith("[Why Choose]") or c.startswith("[Reason]")]
     CAT_ATTITUDES = [c for c in all_cols if c.startswith("[Psychographics]") or c.startswith("[Kids Attitudes]") or c.startswith("[Bev Attitudes]")]
@@ -237,12 +250,7 @@ if uploaded_file:
         'df_working': st.session_state['df_working'],
         'created_segments': st.session_state['created_segments']
     }
-    st.sidebar.download_button(
-        label="💾 Download Workspace (.pkl)",
-        data=pickle.dumps(workspace_export),
-        file_name="my_segment_workspace.pkl",
-        mime="application/octet-stream"
-    )
+    st.sidebar.download_button("💾 Download Workspace (.pkl)", data=pickle.dumps(workspace_export), file_name="my_segment_workspace.pkl", mime="application/octet-stream")
     
     st.sidebar.markdown("---")
     if st.sidebar.button("🔄 Hard Reset App", type="secondary"):
@@ -259,7 +267,13 @@ if uploaded_file:
     # -------------------------------------------------------------
     with tab1:
         st.subheader("Create a Custom Segment")
-        st.markdown("Combine any variables from the survey into a custom mindset or behavioral segment.")
+        
+        # --- GLOBAL SEARCH FOR TAB 1 ---
+        search_query_t1 = st.text_input("🔍 Search to quickly find a variable for your segment (e.g., 'Orange Juice', 'Simply'):", key="t1_search")
+        if search_query_t1:
+            matched_vars_t1 = [c for c in all_cols if search_query_t1.lower() in c.lower()]
+            if matched_vars_t1: st.info(f"Matches found: {', '.join(matched_vars_t1[:5])}...")
+            else: st.warning("No matches found.")
         
         col_pool, col_mand = st.columns(2)
         with col_pool:
@@ -283,7 +297,8 @@ if uploaded_file:
                 target_col = col_logic1 if i % 2 == 0 else col_logic2
                 with target_col:
                     role_label = "(Threshold Pool)" if stmt in threshold_statements else "(Mandatory Rule)"
-                    is_scale = ("[Psychographics]" in stmt) or ("[Kids Attitudes]" in stmt)
+                    # Use stricter check: only use scale if the column name doesn't contain "Core Value"
+                    is_scale = (("[Psychographics]" in stmt) and ("Core Value" not in stmt)) or ("[Kids Attitudes]" in stmt)
                     if is_scale: statement_logic[stmt] = st.selectbox(f"Match requirement for: {stmt[:35]}... {role_label}", options=SCALE_OPTIONS[2:], index=0, key=f"logic_{stmt}")
                     else:
                         st.info(f"✔️ **{stmt[:45]}...** (Auto-Matched as YES/NO)")
@@ -344,6 +359,22 @@ if uploaded_file:
     with tab2:
         st.subheader("Build a Custom Crosstab")
         
+        st.markdown("### 🔍 Global Search")
+        search_query = st.text_input("Type a keyword to instantly find any variable (e.g., 'Orange Juice', 'Walmart', 'Optimist'):", key="ct_search")
+        
+        row_search_res = []
+        col_search_res = []
+        if search_query:
+            matched_vars = [c for c in all_cols + st.session_state['created_segments'] if search_query.lower() in c.lower()]
+            if matched_vars:
+                st.success(f"Found {len(matched_vars)} matching variables for '{search_query}'")
+                s_col1, s_col2 = st.columns(2)
+                with s_col1: row_search_res = st.multiselect("➕ Add matches to Rows:", matched_vars, key="r_search")
+                with s_col2: col_search_res = st.multiselect("➕ Add matches to Columns:", matched_vars, key="c_search")
+            else:
+                st.warning("No variables found matching your search.")
+
+        st.markdown("---")
         with st.expander("⚡ Quick Combiner (AND / OR Logic)", expanded=False):
             st.markdown("Instantly combine variables to use in your crosstabs without leaving this tab. *(Note: Any 1-4 scale Attitudes selected here will automatically be evaluated as 'Any Agree').*")
             qc_cols = st.columns([3, 1, 2])
@@ -357,7 +388,7 @@ if uploaded_file:
                     else:
                         qc_mask = pd.Series(True, index=st.session_state['df_working'].index) if "AND" in qc_logic else pd.Series(False, index=st.session_state['df_working'].index)
                         for v in qc_vars:
-                            is_scale = ("[Psychographics]" in v) or ("[Kids Attitudes]" in v)
+                            is_scale = (("[Psychographics]" in v) and ("Core Value" not in v)) or ("[Kids Attitudes]" in v)
                             v_mask = st.session_state['df_working'][v].isin([1, 2]) if is_scale else st.session_state['df_working'][v] == 1
                             if "AND" in qc_logic: qc_mask = qc_mask & v_mask
                             else: qc_mask = qc_mask | v_mask
@@ -368,40 +399,44 @@ if uploaded_file:
                         st.rerun()
 
         st.markdown("---")
+        st.markdown("### 📂 Or Select From Categories")
         st.markdown("##### ➡️ Select Rows")
         r_col1, r_col2, r_col3, r_col4 = st.columns(4)
         with r_col1: row_demos = st.multiselect("Demographics", CAT_DEMOS, key="r_demo")
-        with r_col2: row_brands = st.multiselect("Brands & Products", CAT_BRANDS, key="r_brand")
-        with r_col3: row_psycho = st.multiselect("Attitudes", CAT_ATTITUDES, key="r_psycho")
-        with r_col4: row_segs = st.multiselect("Saved Segments", st.session_state['created_segments'], key="r_segs")
+        with r_col2: row_cats = st.multiselect("Beverage Categories", CAT_CATEGORIES, key="r_cats")
+        with r_col3: row_brands = st.multiselect("Brands & Products", CAT_BRANDS, key="r_brand")
+        with r_col4: row_psycho = st.multiselect("Attitudes", CAT_ATTITUDES, key="r_psycho")
         
         with st.expander("➕ View More Row Categories", expanded=False):
-            ex_r1, ex_r2, ex_r3 = st.columns(3)
-            with ex_r1: row_chan = st.multiselect("Channels & Occasions", CAT_CHANNELS, key="r_chan")
-            with ex_r2: row_reas = st.multiselect("Drivers & Reasons", CAT_REASONS, key="r_reas")
-            with ex_r3: row_perc = st.multiselect("Brand Perceptions", CAT_PERCEPTIONS, key="r_perc")
+            ex_r1, ex_r2, ex_r3, ex_r4 = st.columns(4)
+            with ex_r1: row_buy = st.multiselect("Buying Styles", CAT_BUYING, key="r_buy")
+            with ex_r2: row_favs = st.multiselect("Rejectors & Favs", CAT_FAVS, key="r_favs")
+            with ex_r3: row_chan = st.multiselect("Channels & Occasions", CAT_CHANNELS, key="r_chan")
+            with ex_r4: row_reas = st.multiselect("Drivers & Perceptions", CAT_REASONS + CAT_PERCEPTIONS, key="r_reas")
             
-        ct_rows = row_demos + row_brands + row_psycho + row_segs + row_chan + row_reas + row_perc
+        raw_ct_rows = row_demos + row_cats + row_brands + row_psycho + row_buy + row_favs + row_chan + row_reas + st.session_state['created_segments'] + row_search_res
+        ct_rows = list(dict.fromkeys([x for x in raw_ct_rows if x]))
         
         st.markdown("---")
         st.markdown("##### ⬇️ Select Columns")
         c_col1, c_col2, c_col3, c_col4 = st.columns(4)
         with c_col1: col_demos = st.multiselect("Demographics ", CAT_DEMOS, key="c_demo")
-        with c_col2: col_brands = st.multiselect("Brands & Products ", CAT_BRANDS, key="c_brand")
-        with c_col3: col_psycho = st.multiselect("Attitudes ", CAT_ATTITUDES, key="c_psycho")
-        with c_col4: col_segs = st.multiselect("Saved Segments ", st.session_state['created_segments'], default=st.session_state['created_segments'], key="c_segs")
+        with c_col2: col_cats = st.multiselect("Beverage Categories ", CAT_CATEGORIES, key="c_cats")
+        with c_col3: col_brands = st.multiselect("Brands & Products ", CAT_BRANDS, key="c_brand")
+        with c_col4: col_psycho = st.multiselect("Attitudes ", CAT_ATTITUDES, key="c_psycho")
         
         with st.expander("➕ View More Column Categories", expanded=False):
-            ex_c1, ex_c2, ex_c3 = st.columns(3)
-            with ex_c1: col_chan = st.multiselect("Channels & Occasions ", CAT_CHANNELS, key="c_chan")
-            with ex_c2: col_reas = st.multiselect("Drivers & Reasons ", CAT_REASONS, key="c_reas")
-            with ex_c3: col_perc = st.multiselect("Brand Perceptions ", CAT_PERCEPTIONS, key="c_perc")
+            ex_c1, ex_c2, ex_c3, ex_c4 = st.columns(4)
+            with ex_c1: col_buy = st.multiselect("Buying Styles ", CAT_BUYING, key="c_buy")
+            with ex_c2: col_favs = st.multiselect("Rejectors & Favs ", CAT_FAVS, key="c_favs")
+            with ex_c3: col_chan = st.multiselect("Channels & Occasions ", CAT_CHANNELS, key="c_chan")
+            with ex_c4: col_reas = st.multiselect("Drivers & Perceptions ", CAT_REASONS + CAT_PERCEPTIONS, key="c_reas")
 
-        ct_cols = col_demos + col_brands + col_psycho + col_segs + col_chan + col_reas + col_perc
+        raw_ct_cols = col_demos + col_cats + col_brands + col_psycho + col_buy + col_favs + col_chan + col_reas + st.session_state['created_segments'] + col_search_res
+        ct_cols = list(dict.fromkeys([x for x in raw_ct_cols if x]))
         
-        # --- NEW: UNIVERSAL LOGIC FINE-TUNER FOR BOTH ROWS AND COLUMNS ---
         if ct_rows and ct_cols:
-            scale_vars_in_ct = [v for v in set(ct_rows + ct_cols) if ("[Psychographics]" in v) or ("[Kids Attitudes]" in v)]
+            scale_vars_in_ct = [v for v in set(ct_rows + ct_cols) if (("[Psychographics]" in v) and ("Core Value" not in v)) or ("[Kids Attitudes]" in v)]
             ct_logic_dict = {}
             if scale_vars_in_ct:
                 with st.expander("⚙️ Fine-Tune Attitude Scales for Rows & Columns (Defaults to Any Agree)", expanded=False):
@@ -419,7 +454,7 @@ if uploaded_file:
             
             col_baselines = {}
             for c in ct_cols:
-                is_scale = ("[Psychographics]" in c) or ("[Kids Attitudes]" in c)
+                is_scale = (("[Psychographics]" in c) and ("Core Value" not in c)) or ("[Kids Attitudes]" in c)
                 if is_scale:
                     logic = ct_logic_dict.get(c, "Any Agree (1 or 2 combined)")
                     col_mask = get_scale_mask(st.session_state['df_working'], c, logic)
@@ -437,7 +472,7 @@ if uploaded_file:
             export_data.append(universe_row)
             
             for r in ct_rows:
-                is_scale = ("[Psychographics]" in r) or ("[Kids Attitudes]" in r)
+                is_scale = (("[Psychographics]" in r) and ("Core Value" not in r)) or ("[Kids Attitudes]" in r)
                 if is_scale:
                     logic = ct_logic_dict.get(r, "Any Agree (1 or 2 combined)")
                     r_mask = get_scale_mask(st.session_state['df_working'], r, logic)
@@ -521,9 +556,8 @@ if uploaded_file:
         map_rows = st.multiselect("Select Core Values (Rows) to map:", CAT_ATTITUDES + CAT_DEMOS, default=CAT_ATTITUDES[:5])
         map_cols = st.multiselect("Select Columns (Brands/Segments) to map:", CAT_BRANDS + st.session_state['created_segments'], default=CAT_BRANDS[:3])
         
-        # --- NEW: TAB 3 SCALE FINE TUNER ---
         if map_rows and map_cols:
-            scale_vars_map = [v for v in set(map_rows + map_cols) if ("[Psychographics]" in v) or ("[Kids Attitudes]" in v)]
+            scale_vars_map = [v for v in set(map_rows + map_cols) if (("[Psychographics]" in v) and ("Core Value" not in v)) or ("[Kids Attitudes]" in v)]
             map_logic_dict = {}
             if scale_vars_map:
                 with st.expander("⚙️ Fine-Tune Attitude Scales (Defaults to Any Agree)", expanded=False):
@@ -537,7 +571,7 @@ if uploaded_file:
             map_matrix = []
             for r in map_rows:
                 r_data = []
-                is_scale_r = ("[Psychographics]" in r) or ("[Kids Attitudes]" in r)
+                is_scale_r = (("[Psychographics]" in r) and ("Core Value" not in r)) or ("[Kids Attitudes]" in r)
                 if is_scale_r:
                     logic = map_logic_dict.get(r, "Any Agree (1 or 2 combined)")
                     r_mask = get_scale_mask(st.session_state['df_working'], r, logic)
@@ -545,7 +579,7 @@ if uploaded_file:
                     r_mask = st.session_state['df_working'][r] == 1
                     
                 for c in map_cols:
-                    is_scale_c = ("[Psychographics]" in c) or ("[Kids Attitudes]" in c)
+                    is_scale_c = (("[Psychographics]" in c) and ("Core Value" not in c)) or ("[Kids Attitudes]" in c)
                     if is_scale_c:
                         logic = map_logic_dict.get(c, "Any Agree (1 or 2 combined)")
                         c_mask = get_scale_mask(st.session_state['df_working'], c, logic)
