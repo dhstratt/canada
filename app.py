@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import io
+import pickle
 
 # =====================================================================
 # INITIAL SETUP & PAGE CONFIG
@@ -10,7 +11,7 @@ import io
 st.set_page_config(page_title="Market Segment & Landscape Builder", layout="wide")
 
 st.title("🎯 Advanced Market Segment & Landscape Builder")
-st.markdown("Upload your respondent-level Master File to translate attitudes, store custom segments, and map the competitive landscape.")
+st.markdown("Upload your respondent-level Master File or a Saved Workspace to translate attitudes, build segments, and map the competitive landscape.")
 
 # =====================================================================
 # CODEBOOK DICTIONARY (Translates Q-Codes to Plain English)
@@ -54,7 +55,6 @@ PSYCHOGRAPHIC_MAP = {
     "Q22_r8": "I consider my diet to be very healthy"
 }
 
-# Create a clean list of just the English statements for the UI
 ENGLISH_STATEMENTS = list(PSYCHOGRAPHIC_MAP.values())
 
 # =====================================================================
@@ -80,12 +80,10 @@ def load_and_prep_data(file):
     return df
 
 # =====================================================================
-# SIDEBAR: UPLOAD & SESSION STATE INIT
+# SIDEBAR: UPLOAD & WORKSPACE MANAGEMENT
 # =====================================================================
-import pickle
-
-st.sidebar.header("1. Upload Master Data or Workspace")
-uploaded_file = st.sidebar.file_uploader("Upload Respondent-Level File (.csv/.xlsx) or Workspace (.pkl)", type=["csv", "xlsx", "pkl"])
+st.sidebar.header("1. Upload Data or Workspace")
+uploaded_file = st.sidebar.file_uploader("Upload Master File (.csv/.xlsx) or Workspace (.pkl)", type=["csv", "xlsx", "pkl"])
 
 if uploaded_file:
     # -----------------------------------------------------------------
@@ -115,22 +113,24 @@ if uploaded_file:
             
         st.sidebar.success(f"Loaded Master File: {len(df_base)} Respondents!")
     
+    # -----------------------------------------------------------------
+    # SIDEBAR: VARIABLE DEFINITIONS & SAVED SEGMENTS
+    # -----------------------------------------------------------------
     st.sidebar.header("2. Define Your Variables")
-    # Dynamically find brand/demo columns by excluding Q-codes and mapped English statements
+    
     exclude_cols = ENGLISH_STATEMENTS + ["Weight"] + st.session_state.get('created_segments', [])
     brand_cols = st.sidebar.multiselect(
         "Select Brand Usage Columns:", 
         [col for col in df_base.columns if col not in exclude_cols and not col.startswith("Q")]
     )
     
-    # Display saved segments in sidebar
     if st.session_state['created_segments']:
         st.sidebar.markdown("---")
         st.sidebar.subheader("💾 Stored Segments")
         for seg in st.session_state['created_segments']:
             st.sidebar.markdown(f"- `{seg}`")
             
-        if st.sidebar.button("🗑️ Clear Stored Segments"):
+        if st.sidebar.button("🗑️ Clear All Segments"):
             st.session_state['df_working'] = st.session_state['df_working'].drop(columns=st.session_state['created_segments'])
             st.session_state['created_segments'] = []
             st.rerun()
@@ -190,6 +190,30 @@ if uploaded_file:
                 "Must meet requirements for at least how many statements?", 
                 min_value=1, max_value=max_statements, value=max(1, int(max_statements * 0.7))
             )
+            
+        # =====================================================================
+        # DYNAMIC PREVIEW SIZING CALCULATION
+        # =====================================================================
+        matches_df = pd.DataFrame(index=st.session_state['df_working'].index)
+        
+        for stmt, logic in statement_logic.items():
+            if logic == "Any Agree (1 or 2)":
+                matches_df[stmt] = st.session_state['df_working'][stmt].isin([1, 2]).astype(int)
+            elif logic == "Agree Completely (1 only)":
+                matches_df[stmt] = (st.session_state['df_working'][stmt] == 1).astype(int)
+            elif logic == "Any Disagree (3 or 4)":
+                matches_df[stmt] = st.session_state['df_working'][stmt].isin([3, 4]).astype(int)
+            elif logic == "Disagree Completely (4 only)":
+                matches_df[stmt] = (st.session_state['df_working'][stmt] == 4).astype(int)
+                
+        temp_count = matches_df.sum(axis=1)
+        temp_segment = (temp_count >= threshold).astype(int)
+        
+        raw_match = int(temp_segment.sum())
+        total_weighted = st.session_state['df_working']['Weight'].sum()
+        weighted_match = st.session_state['df_working'][temp_segment == 1]['Weight'].sum()
+        
+        st.info(f"📊 **Dynamic Preview:** This configuration currently captures **{raw_match:,}** respondents ({(weighted_match/total_weighted)*100:.1f}% of total market).")
         
         with col_save:
             segment_name = st.text_input("Name your Segment:", value="New Segment 1")
@@ -198,24 +222,8 @@ if uploaded_file:
                 if segment_name in st.session_state['created_segments']:
                     st.error("A segment with this name already exists. Please choose a different name.")
                 else:
-                    matches_df = pd.DataFrame(index=st.session_state['df_working'].index)
-                    
-                    for stmt, logic in statement_logic.items():
-                        if logic == "Any Agree (1 or 2)":
-                            matches_df[stmt] = st.session_state['df_working'][stmt].isin([1, 2]).astype(int)
-                        elif logic == "Agree Completely (1 only)":
-                            matches_df[stmt] = (st.session_state['df_working'][stmt] == 1).astype(int)
-                        elif logic == "Any Disagree (3 or 4)":
-                            matches_df[stmt] = st.session_state['df_working'][stmt].isin([3, 4]).astype(int)
-                        elif logic == "Disagree Completely (4 only)":
-                            matches_df[stmt] = (st.session_state['df_working'][stmt] == 4).astype(int)
-                            
-                    st.session_state['df_working']['temp_count'] = matches_df.sum(axis=1)
-                    
-                    # Store as a permanent 1/0 column in the working dataframe
-                    st.session_state['df_working'][segment_name] = (st.session_state['df_working']['temp_count'] >= threshold).astype(int)
-                    st.session_state['df_working'].drop(columns=['temp_count'], inplace=True)
-                    
+                    # Save the dynamically calculated array straight to the dataframe
+                    st.session_state['df_working'][segment_name] = temp_segment
                     st.session_state['created_segments'].append(segment_name)
                     st.success(f"✅ '{segment_name}' successfully added to workspace!")
                     st.rerun()
@@ -330,7 +338,7 @@ if uploaded_file:
                         
                     export_data.append(r_data)
                 
-                # 1. FLAT STRUCTURE FOR STREAMLIT PREVIEW (Prevents PyArrow Bug)
+                # 1. FLAT STRUCTURE FOR STREAMLIT PREVIEW
                 preview_headers = ["Statement"]
                 metrics = ["Unweighted", "Weighted", "Vertical(%)", "Horizontal(%)", "Index"]
                 
@@ -360,11 +368,9 @@ if uploaded_file:
                     excel_headers.extend([c, "", "", "", ""])
                     excel_sub_headers.extend(["Unweighted", "Weighted", "Vertical(%)", "Horizontal(%)", "Index"])
                     
-                # Creating the dataframe WITHOUT supplying columns in the constructor to avoid duplicate header conflicts
                 df_excel = pd.DataFrame(export_data)
                 df_excel.columns = pd.MultiIndex.from_tuples(zip(excel_headers, excel_sub_headers))
                 
-                # THIS FIXES THE BUG: Set the 'Statement' column to act as the true DataFrame index
                 df_excel = df_excel.set_index(("Statement", ""))
                 
                 output = io.BytesIO()
@@ -380,7 +386,6 @@ if uploaded_file:
                     ])
                     meta_data.to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
                     
-                    # By passing index=True, Pandas perfectly formats the multi-index headers over our "Statement" index rows
                     df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
                     
                 output.seek(0)
