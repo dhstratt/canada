@@ -45,6 +45,11 @@ DEMO_MAP = {
     "D11": {1: "Employ: Full Time", 2: "Employ: Part Time", 4: "Employ: Student", 5: "Employ: Homemaker", 7: "Employ: Retired"}
 }
 
+# Variable Type Lists for UI Organization
+PSYCHO_VARS = list(PSYCHOGRAPHICS.values())
+BRAND_VARS = list(BRANDS.values())
+DEMO_VARS = [val for subdict in DEMO_MAP.values() for val in subdict.values()]
+
 SCALE_OPTIONS = [
     "Exact Match / YES (Binary)",
     "Does Not Match / NO (Binary)",
@@ -189,16 +194,19 @@ if uploaded_file:
             st.sidebar.success(f"Workspace Restored! Loaded {len(st.session_state['created_segments'])} Custom Segments.")
         else:
             df_base = load_and_prep_data(uploaded_file)
-            if 'data_loaded' not in st.session_state or st.session_state.get('file_name') != uploaded_file.name:
+            is_legacy_state = False
+            if 'df_working' in st.session_state:
+                if not any(c.startswith('[Demo]') for c in st.session_state['df_working'].columns):
+                    is_legacy_state = True
+            
+            if 'data_loaded' not in st.session_state or st.session_state.get('file_name') != uploaded_file.name or is_legacy_state:
                 st.session_state['df_working'] = df_base.copy()
                 st.session_state['created_segments'] = []
                 st.session_state['data_loaded'] = True
                 st.session_state['file_name'] = uploaded_file.name
             st.sidebar.success(f"Loaded Master File: {len(df_base)} Respondents!")
     
-    # Categorize all available variables for UI
     all_cols = [c for c in st.session_state['df_working'].columns if c != "Weight" and c not in st.session_state['created_segments']]
-    
     CAT_DEMOS = [c for c in all_cols if c.startswith("[Demo]")]
     CAT_BRANDS = [c for c in all_cols if c.startswith("[Brand]") or c.startswith("[Size]")]
     CAT_CHANNELS = [c for c in all_cols if c.startswith("[Channel]") or c.startswith("[When/How]") or c.startswith("[Frequency]") or c.startswith("[Who Drinks]")]
@@ -235,6 +243,11 @@ if uploaded_file:
         file_name="my_segment_workspace.pkl",
         mime="application/octet-stream"
     )
+    
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🔄 Hard Reset App", type="secondary"):
+        st.session_state.clear()
+        st.rerun()
 
     # =====================================================================
     # MAIN WORKSPACE TABS
@@ -251,19 +264,11 @@ if uploaded_file:
         col_pool, col_mand = st.columns(2)
         with col_pool:
             st.markdown("**A. Threshold Statement Pool**")
-            threshold_statements = st.multiselect(
-                "Select variables for the 'Count' requirement:", 
-                options=all_cols,
-                help="These variables are tied to the threshold slider (e.g., Must meet 3 out of these 5)."
-            )
+            threshold_statements = st.multiselect("Select variables for the 'Count' requirement:", options=all_cols)
             
         with col_mand:
             st.markdown("**B. Mandatory 'AND' Statements**")
-            mandatory_statements = st.multiselect(
-                "Select variables that MUST be met (Optional):", 
-                options=[s for s in all_cols if s not in threshold_statements],
-                help="Any variable added here operates as a strict YES/NO. The respondent MUST meet this rule regardless of their threshold score."
-            )
+            mandatory_statements = st.multiselect("Select variables that MUST be met (Optional):", options=[s for s in all_cols if s not in threshold_statements])
         
         all_selected = list(set(threshold_statements + mandatory_statements))
         
@@ -278,52 +283,33 @@ if uploaded_file:
                 target_col = col_logic1 if i % 2 == 0 else col_logic2
                 with target_col:
                     role_label = "(Threshold Pool)" if stmt in threshold_statements else "(Mandatory Rule)"
-                    
-                    # Determine if it's a 1-4 scale psychographic or a binary YES/NO checkbox
                     is_scale = ("[Psychographics]" in stmt) or ("[Kids Attitudes]" in stmt)
-                    
-                    if is_scale:
-                        statement_logic[stmt] = st.selectbox(
-                            f"Match requirement for: {stmt[:35]}... {role_label}",
-                            options=SCALE_OPTIONS[2:], # Only show agree/disagree scales
-                            index=0,
-                            key=f"logic_{stmt}"
-                        )
+                    if is_scale: statement_logic[stmt] = st.selectbox(f"Match requirement for: {stmt[:35]}... {role_label}", options=SCALE_OPTIONS[2:], index=0, key=f"logic_{stmt}")
                     else:
                         st.info(f"✔️ **{stmt[:45]}...** (Auto-Matched as YES/NO)")
                         statement_logic[stmt] = "Exact Match / YES (Binary)"
             
             st.markdown("---")
-            
             col_thresh, col_save = st.columns([2, 1])
             with col_thresh:
                 if threshold_statements:
                     max_statements = len(threshold_statements)
-                    threshold = st.slider(
-                        "Respondent must meet requirements for at least how many of the Threshold Statements?", 
-                        min_value=1, max_value=max_statements, value=max(1, int(max_statements * 0.7))
-                    )
+                    threshold = st.slider("Must meet requirements for at least how many of the Threshold Statements?", min_value=1, max_value=max_statements, value=max(1, int(max_statements * 0.7)))
                 else:
                     threshold = 0
                     st.caption("No Threshold pool selected. Evaluating Mandatory statements only.")
                 
             matches_df = pd.DataFrame(index=st.session_state['df_working'].index)
-            
             for stmt, logic in statement_logic.items():
                 matches_df[stmt] = get_scale_mask(st.session_state['df_working'], stmt, logic).astype(bool)
                     
-            if threshold_statements:
-                meets_threshold = matches_df[threshold_statements].sum(axis=1) >= threshold
-            else:
-                meets_threshold = pd.Series(True, index=matches_df.index)
+            if threshold_statements: meets_threshold = matches_df[threshold_statements].sum(axis=1) >= threshold
+            else: meets_threshold = pd.Series(True, index=matches_df.index)
                 
-            if mandatory_statements:
-                meets_mandatory = matches_df[mandatory_statements].all(axis=1)
-            else:
-                meets_mandatory = pd.Series(True, index=matches_df.index)
+            if mandatory_statements: meets_mandatory = matches_df[mandatory_statements].all(axis=1)
+            else: meets_mandatory = pd.Series(True, index=matches_df.index)
                 
             temp_segment = (meets_threshold & meets_mandatory).astype(int)
-            
             raw_match = int(temp_segment.sum())
             total_weighted = st.session_state['df_working']['Weight'].sum()
             weighted_match = st.session_state['df_working'][temp_segment == 1]['Weight'].sum()
@@ -332,10 +318,8 @@ if uploaded_file:
             
             with col_save:
                 segment_name = st.text_input("Name your Segment:", value="New Segment 1")
-                
                 if st.button("💾 Save Segment to Workspace", type="primary"):
-                    if segment_name in st.session_state['created_segments']:
-                        st.error("A segment with this name already exists. Please choose a different name.")
+                    if segment_name in st.session_state['created_segments'] or segment_name in all_cols: st.error("A segment with this name already exists.")
                     else:
                         st.session_state['df_working'][segment_name] = temp_segment
                         st.session_state['created_segments'].append(segment_name)
@@ -349,14 +333,8 @@ if uploaded_file:
             for seg in st.session_state['created_segments']:
                 seg_wgt = st.session_state['df_working'][st.session_state['df_working'][seg] == 1]['Weight'].sum()
                 seg_unw = len(st.session_state['df_working'][st.session_state['df_working'][seg] == 1])
-                sizing_data.append({
-                    "Segment Name": seg,
-                    "Unweighted Count": seg_unw,
-                    "Weighted Count": int(seg_wgt),
-                    "% of Total Market": (seg_wgt / total_pop) if total_pop > 0 else 0
-                })
-            df_sizing = pd.DataFrame(sizing_data)
-            st.dataframe(df_sizing.style.format({"% of Total Market": "{:.1%}", "Unweighted Count": "{:,}", "Weighted Count": "{:,}"}), use_container_width=True)
+                sizing_data.append({"Segment Name": seg, "Unweighted Count": seg_unw, "Weighted Count": int(seg_wgt), "% of Total Market": (seg_wgt / total_pop) if total_pop > 0 else 0})
+            st.dataframe(pd.DataFrame(sizing_data).style.format({"% of Total Market": "{:.1%}", "Unweighted Count": "{:,}", "Weighted Count": "{:,}"}), use_container_width=True)
         else:
             st.info("No segments have been created yet. Build and save a segment above to see its sizing here.")
 
@@ -365,8 +343,31 @@ if uploaded_file:
     # -------------------------------------------------------------
     with tab2:
         st.subheader("Build a Custom Crosstab")
-        st.markdown("Pick any combination of categorized variables to act as your cross-tab rows and columns.")
         
+        with st.expander("⚡ Quick Combiner (AND / OR Logic)", expanded=False):
+            st.markdown("Instantly combine variables to use in your crosstabs without leaving this tab. *(Note: Any 1-4 scale Attitudes selected here will automatically be evaluated as 'Any Agree').*")
+            qc_cols = st.columns([3, 1, 2])
+            with qc_cols[0]: qc_vars = st.multiselect("Select Variables to Combine:", all_cols, key="qc_vars")
+            with qc_cols[1]: qc_logic = st.radio("Combine Using:", ["AND (Must meet ALL)", "OR (Must meet ANY)"], key="qc_logic")
+            with qc_cols[2]:
+                qc_name = st.text_input("Name this Combination:", "New Combined Var", key="qc_name")
+                if st.button("➕ Add to Crosstab Buckets", use_container_width=True):
+                    if qc_name in st.session_state['created_segments'] or qc_name in all_cols: st.error("Name already exists!")
+                    elif len(qc_vars) < 2: st.warning("Please select at least 2 variables to combine.")
+                    else:
+                        qc_mask = pd.Series(True, index=st.session_state['df_working'].index) if "AND" in qc_logic else pd.Series(False, index=st.session_state['df_working'].index)
+                        for v in qc_vars:
+                            is_scale = ("[Psychographics]" in v) or ("[Kids Attitudes]" in v)
+                            v_mask = st.session_state['df_working'][v].isin([1, 2]) if is_scale else st.session_state['df_working'][v] == 1
+                            if "AND" in qc_logic: qc_mask = qc_mask & v_mask
+                            else: qc_mask = qc_mask | v_mask
+                                
+                        st.session_state['df_working'][qc_name] = qc_mask.astype(int)
+                        st.session_state['created_segments'].append(qc_name)
+                        st.success(f"✅ {qc_name} added to Saved Segments!")
+                        st.rerun()
+
+        st.markdown("---")
         st.markdown("##### ➡️ Select Rows")
         r_col1, r_col2, r_col3, r_col4 = st.columns(4)
         with r_col1: row_demos = st.multiselect("Demographics", CAT_DEMOS, key="r_demo")
@@ -374,7 +375,6 @@ if uploaded_file:
         with r_col3: row_psycho = st.multiselect("Attitudes", CAT_ATTITUDES, key="r_psycho")
         with r_col4: row_segs = st.multiselect("Saved Segments", st.session_state['created_segments'], key="r_segs")
         
-        # Additional Row Categories
         with st.expander("➕ View More Row Categories", expanded=False):
             ex_r1, ex_r2, ex_r3 = st.columns(3)
             with ex_r1: row_chan = st.multiselect("Channels & Occasions", CAT_CHANNELS, key="r_chan")
@@ -382,16 +382,6 @@ if uploaded_file:
             with ex_r3: row_perc = st.multiselect("Brand Perceptions", CAT_PERCEPTIONS, key="r_perc")
             
         ct_rows = row_demos + row_brands + row_psycho + row_segs + row_chan + row_reas + row_perc
-        
-        # Only show fine-tuning if scale-based Psychographics are selected for the rows
-        ct_row_logic = {}
-        if row_psycho:
-            with st.expander("⚙️ Fine-Tune Attitude Row Logic (Defaults to Any Agree)", expanded=False):
-                col_rl1, col_rl2 = st.columns(2)
-                for i, r in enumerate(row_psycho):
-                    t_col = col_rl1 if i % 2 == 0 else col_rl2
-                    with t_col:
-                        ct_row_logic[r] = st.selectbox(f"{r[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"ct_logic_{r}")
         
         st.markdown("---")
         st.markdown("##### ⬇️ Select Columns")
@@ -409,7 +399,18 @@ if uploaded_file:
 
         ct_cols = col_demos + col_brands + col_psycho + col_segs + col_chan + col_reas + col_perc
         
+        # --- NEW: UNIVERSAL LOGIC FINE-TUNER FOR BOTH ROWS AND COLUMNS ---
         if ct_rows and ct_cols:
+            scale_vars_in_ct = [v for v in set(ct_rows + ct_cols) if ("[Psychographics]" in v) or ("[Kids Attitudes]" in v)]
+            ct_logic_dict = {}
+            if scale_vars_in_ct:
+                with st.expander("⚙️ Fine-Tune Attitude Scales for Rows & Columns (Defaults to Any Agree)", expanded=False):
+                    col_rl1, col_rl2 = st.columns(2)
+                    for i, v in enumerate(scale_vars_in_ct):
+                        t_col = col_rl1 if i % 2 == 0 else col_rl2
+                        with t_col:
+                            ct_logic_dict[v] = st.selectbox(f"{v[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"ct_logic_all_{v}")
+
             total_unweighted = len(st.session_state['df_working'])
             total_weighted = st.session_state['df_working']['Weight'].sum()
             
@@ -419,12 +420,18 @@ if uploaded_file:
             col_baselines = {}
             for c in ct_cols:
                 is_scale = ("[Psychographics]" in c) or ("[Kids Attitudes]" in c)
-                if is_scale: col_mask = st.session_state['df_working'][c].isin([1, 2])
-                else: col_mask = st.session_state['df_working'][c] == 1
+                if is_scale:
+                    logic = ct_logic_dict.get(c, "Any Agree (1 or 2 combined)")
+                    col_mask = get_scale_mask(st.session_state['df_working'], c, logic)
+                    short_suffix = logic.split(" (")[0]
+                    c_label = f"{c} ({short_suffix})"
+                else:
+                    col_mask = st.session_state['df_working'][c] == 1
+                    c_label = c
                     
                 col_unweighted = len(st.session_state['df_working'][col_mask])
                 col_weighted = st.session_state['df_working'][col_mask]['Weight'].sum()
-                col_baselines[c] = {"unw": col_unweighted, "wgt": col_weighted, "mask": col_mask}
+                col_baselines[c] = {"unw": col_unweighted, "wgt": col_weighted, "mask": col_mask, "label": c_label}
                 universe_row.extend([col_unweighted, 1.00, (col_weighted / total_weighted) if total_weighted > 0 else 0, 100])
                 
             export_data.append(universe_row)
@@ -432,7 +439,7 @@ if uploaded_file:
             for r in ct_rows:
                 is_scale = ("[Psychographics]" in r) or ("[Kids Attitudes]" in r)
                 if is_scale:
-                    logic = ct_row_logic.get(r, "Any Agree (1 or 2 combined)")
+                    logic = ct_logic_dict.get(r, "Any Agree (1 or 2 combined)")
                     r_mask = get_scale_mask(st.session_state['df_working'], r, logic)
                     short_suffix = logic.split(" (")[0]
                     r_label = f"{r} ({short_suffix})"
@@ -464,8 +471,7 @@ if uploaded_file:
             metrics = ["Unweighted", "Vertical(%)", "Horizontal(%)", "Index"]
             for m in metrics: preview_headers.append(f"Study Universe - {m}")
             for c in ct_cols:
-                is_scale = ("[Psychographics]" in c) or ("[Kids Attitudes]" in c)
-                c_display = f"{c} (Any Agree)" if is_scale else c
+                c_display = col_baselines[c]["label"]
                 for m in metrics: preview_headers.append(f"{c_display} - {m}")
                     
             df_preview = pd.DataFrame(export_data, columns=preview_headers).set_index("Statement")
@@ -482,8 +488,7 @@ if uploaded_file:
             excel_headers = ["Statement", "Study Universe", "", "", ""] 
             excel_sub_headers = ["", "Unweighted", "Vertical(%)", "Horizontal(%)", "Index"]
             for c in ct_cols:
-                is_scale = ("[Psychographics]" in c) or ("[Kids Attitudes]" in c)
-                c_display = f"{c} (Any Agree)" if is_scale else c
+                c_display = col_baselines[c]["label"]
                 excel_headers.extend([c_display, "", "", ""])
                 excel_sub_headers.extend(["Unweighted", "Vertical(%)", "Horizontal(%)", "Index"])
                 
@@ -516,18 +521,36 @@ if uploaded_file:
         map_rows = st.multiselect("Select Core Values (Rows) to map:", CAT_ATTITUDES + CAT_DEMOS, default=CAT_ATTITUDES[:5])
         map_cols = st.multiselect("Select Columns (Brands/Segments) to map:", CAT_BRANDS + st.session_state['created_segments'], default=CAT_BRANDS[:3])
         
+        # --- NEW: TAB 3 SCALE FINE TUNER ---
+        if map_rows and map_cols:
+            scale_vars_map = [v for v in set(map_rows + map_cols) if ("[Psychographics]" in v) or ("[Kids Attitudes]" in v)]
+            map_logic_dict = {}
+            if scale_vars_map:
+                with st.expander("⚙️ Fine-Tune Attitude Scales (Defaults to Any Agree)", expanded=False):
+                    col_ml1, col_ml2 = st.columns(2)
+                    for i, v in enumerate(scale_vars_map):
+                        m_col = col_ml1 if i % 2 == 0 else col_ml2
+                        with m_col:
+                            map_logic_dict[v] = st.selectbox(f"{v[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"map_logic_{v}")
+        
         if st.button("🗺️ Generate Map") and map_rows and len(map_cols) > 1:
             map_matrix = []
             for r in map_rows:
                 r_data = []
                 is_scale_r = ("[Psychographics]" in r) or ("[Kids Attitudes]" in r)
-                if is_scale_r: r_mask = st.session_state['df_working'][r].isin([1, 2])
-                else: r_mask = st.session_state['df_working'][r] == 1
+                if is_scale_r:
+                    logic = map_logic_dict.get(r, "Any Agree (1 or 2 combined)")
+                    r_mask = get_scale_mask(st.session_state['df_working'], r, logic)
+                else: 
+                    r_mask = st.session_state['df_working'][r] == 1
                     
                 for c in map_cols:
                     is_scale_c = ("[Psychographics]" in c) or ("[Kids Attitudes]" in c)
-                    if is_scale_c: c_mask = st.session_state['df_working'][c].isin([1, 2])
-                    else: c_mask = st.session_state['df_working'][c] == 1
+                    if is_scale_c:
+                        logic = map_logic_dict.get(c, "Any Agree (1 or 2 combined)")
+                        c_mask = get_scale_mask(st.session_state['df_working'], c, logic)
+                    else: 
+                        c_mask = st.session_state['df_working'][c] == 1
                         
                     val = st.session_state['df_working'][r_mask & c_mask]['Weight'].sum()
                     r_data.append(val)
