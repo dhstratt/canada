@@ -224,7 +224,6 @@ if uploaded_file:
         # =====================================================================
         matches_df = pd.DataFrame(index=st.session_state['df_working'].index)
         
-        # 1. Apply the detailed Logic rules
         for stmt, logic in statement_logic.items():
             if logic == "Any Agree (1 or 2)":
                 matches_df[stmt] = st.session_state['df_working'][stmt].isin([1, 2]).astype(bool)
@@ -235,19 +234,16 @@ if uploaded_file:
             elif logic == "Disagree Completely (4 only)":
                 matches_df[stmt] = (st.session_state['df_working'][stmt] == 4).astype(bool)
                 
-        # 2. Evaluate Threshold Pool Matches
         if threshold_statements:
             meets_threshold = matches_df[threshold_statements].sum(axis=1) >= threshold
         else:
             meets_threshold = pd.Series(True, index=matches_df.index)
             
-        # 3. Evaluate Mandatory AND Matches
         if mandatory_statements:
             meets_mandatory = matches_df[mandatory_statements].all(axis=1)
         else:
             meets_mandatory = pd.Series(True, index=matches_df.index)
             
-        # 4. Combine Both rules into the Final Segment Flag
         temp_segment = (meets_threshold & meets_mandatory).astype(int)
         
         raw_match = int(temp_segment.sum())
@@ -303,11 +299,11 @@ if uploaded_file:
                 
                 df_idx = pd.DataFrame(index_data).sort_values(by="Index Score", ascending=False)
                 
-                st.metric("Total Weighted Population of Segment", f"{int(seg_pop):,}", f"{(seg_pop/total_pop)*100:.1f}% of Market")
+                st.metric("Total Size of Segment", f"{int(seg_pop):,}", f"{(seg_pop/total_pop)*100:.1f}% of Market")
                 st.dataframe(df_idx.style.format({"Base %": "{:.1f}%", "Segment %": "{:.1f}%"}))
                 
         # -------------------------------------------------------------
-        # TAB 2: ON-DEMAND CROSSTABS
+        # TAB 2: ON-DEMAND CROSSTABS (Unweighted Layout)
         # -------------------------------------------------------------
         with tab2:
             st.subheader("Build a Custom Crosstab")
@@ -333,7 +329,8 @@ if uploaded_file:
                 total_weighted = st.session_state['df_working']['Weight'].sum()
                 
                 export_data = []
-                universe_row = ["Study Universe", total_unweighted, total_weighted, 1.00, 1.00, 100]
+                # Remove "Weighted" column logic, just Unw, Vert%, Horz%, Index
+                universe_row = ["Study Universe", total_unweighted, 1.00, 1.00, 100]
                 
                 col_baselines = {}
                 for c in ct_cols:
@@ -343,7 +340,6 @@ if uploaded_file:
                     
                     universe_row.extend([
                         col_unweighted,
-                        col_weighted,
                         1.00, 
                         (col_weighted / total_weighted) if total_weighted > 0 else 0, 
                         100 
@@ -356,7 +352,7 @@ if uploaded_file:
                     stmt_weighted = st.session_state['df_working'][st.session_state['df_working'][r].isin([1, 2])]['Weight'].sum()
                     stmt_vert_pct = (stmt_weighted / total_weighted) if total_weighted > 0 else 0
                     
-                    r_data = [r, stmt_unweighted, stmt_weighted, stmt_vert_pct, 1.00, 100]
+                    r_data = [r, stmt_unweighted, stmt_vert_pct, 1.00, 100]
                     
                     for c in ct_cols:
                         cross_unweighted = len(st.session_state['df_working'][(st.session_state['df_working'][r].isin([1, 2])) & (st.session_state['df_working'][c] == 1)])
@@ -370,7 +366,6 @@ if uploaded_file:
                         
                         r_data.extend([
                             cross_unweighted,
-                            cross_weighted,
                             vert_pct,
                             horz_pct,
                             int(round(idx_score, 0))
@@ -378,8 +373,9 @@ if uploaded_file:
                         
                     export_data.append(r_data)
                 
+                # 1. FLAT STRUCTURE FOR STREAMLIT PREVIEW
                 preview_headers = ["Statement"]
-                metrics = ["Unweighted", "Weighted", "Vertical(%)", "Horizontal(%)", "Index"]
+                metrics = ["Unweighted", "Vertical(%)", "Horizontal(%)", "Index"]
                 
                 for m in metrics:
                     preview_headers.append(f"Study Universe - {m}")
@@ -390,21 +386,25 @@ if uploaded_file:
                 df_preview = pd.DataFrame(export_data, columns=preview_headers).set_index("Statement")
                 
                 st.markdown("**Preview (First 10 Rows):**")
+                
                 format_dict = {}
                 for col in df_preview.columns:
                     if "Vertical" in col or "Horizontal" in col:
-                        format_dict[col] = "{:.1f}%"
-                    elif "Weighted" in col:
+                        format_dict[col] = "{:.1%}" 
+                    elif "Unweighted" in col:
                         format_dict[col] = "{:,.0f}"
+                    elif "Index" in col:
+                        format_dict[col] = "{:.0f}"
                 
                 st.dataframe(df_preview.head(10).style.format(format_dict))
                 
-                excel_headers = ["Statement", "Study Universe", "", "", "", ""]
-                excel_sub_headers = ["", "Unweighted", "Weighted", "Vertical(%)", "Horizontal(%)", "Index"]
+                # 2. MULTI-INDEX STRUCTURE FOR EXCEL EXPORT
+                excel_headers = ["Statement", "Study Universe", "", "", ""] # 4 total columns for base
+                excel_sub_headers = ["", "Unweighted", "Vertical(%)", "Horizontal(%)", "Index"]
                 
                 for c in ct_cols:
-                    excel_headers.extend([c, "", "", "", ""])
-                    excel_sub_headers.extend(["Unweighted", "Weighted", "Vertical(%)", "Horizontal(%)", "Index"])
+                    excel_headers.extend([c, "", "", ""])
+                    excel_sub_headers.extend(["Unweighted", "Vertical(%)", "Horizontal(%)", "Index"])
                     
                 df_excel = pd.DataFrame(export_data)
                 df_excel.columns = pd.MultiIndex.from_tuples(zip(excel_headers, excel_sub_headers))
@@ -416,7 +416,7 @@ if uploaded_file:
                     meta_data = pd.DataFrame([
                         ["CROSSTAB TITLE : Custom Segment Profiles"],
                         ["STUDY NAME : Advanced Market Mapper"],
-                        ["WEIGHT TYPE : Population"],
+                        ["WEIGHT TYPE : Unweighted / Population"],
                         ["DATE EXECUTED : Auto-Generated"],
                         [""],
                         ["SELECTED BASE : Study Universe"],
@@ -426,6 +426,24 @@ if uploaded_file:
                     
                     df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
                     
+                    # 3. NATIVE EXCEL FORMATTING VIA OPENPYXL (Updated for 4-column blocks)
+                    workbook = writer.book
+                    worksheet = writer.sheets['Crosstab']
+                    
+                    for row in worksheet.iter_rows(min_row=12, max_row=worksheet.max_row):
+                        for cell in row:
+                            if cell.column == 1:
+                                continue  # Skip Statement text
+                            
+                            col_mod = (cell.column - 1) % 4
+                            
+                            if col_mod in [2, 3]:   # Vertical(%) and Horizontal(%)
+                                cell.number_format = '0.1%'
+                            elif col_mod == 1:      # Unweighted Count
+                                cell.number_format = '#,##0'
+                            elif col_mod == 0:      # Index Score
+                                cell.number_format = '0'
+                                
                 output.seek(0)
                 
                 st.download_button(
