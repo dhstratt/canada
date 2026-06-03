@@ -128,7 +128,6 @@ if uploaded_file:
         st.sidebar.markdown("---")
         st.sidebar.subheader("💾 Stored Segments")
         
-        # Adding Individual Delete Buttons
         for seg in st.session_state['created_segments']:
             col_name, col_del = st.sidebar.columns([4, 1])
             col_name.markdown(f"`{seg}`")
@@ -137,7 +136,6 @@ if uploaded_file:
                 st.session_state['created_segments'].remove(seg)
                 st.rerun()
                 
-        # Global clear button
         st.sidebar.markdown("---")
         if st.sidebar.button("🗑️ Clear All Segments", type="secondary"):
             st.session_state['df_working'] = st.session_state['df_working'].drop(columns=st.session_state['created_segments'])
@@ -168,24 +166,41 @@ if uploaded_file:
     # MAIN WORKSPACE: CUSTOM SEGMENT BUILDER
     # =====================================================================
     st.header("Step 1: Configure & Store Target Mindsets")
-    st.markdown("Select statements, set logic, name your segment, and save it to your workspace.")
+    st.markdown("Define the pool of statements for your sliding threshold, and/or assign statements that act as mandatory 'AND' rules.")
     
-    selected_statements = st.multiselect(
-        "Which attitude statements define this segment?", 
-        options=ENGLISH_STATEMENTS
-    )
+    col_pool, col_mand = st.columns(2)
     
-    if selected_statements:
+    with col_pool:
+        st.subheader("A. Threshold Statement Pool")
+        threshold_statements = st.multiselect(
+            "Select statements for the 'Count' requirement:", 
+            options=ENGLISH_STATEMENTS,
+            help="These statements are tied to the threshold slider (e.g., Must meet 3 out of these 5)."
+        )
+        
+    with col_mand:
+        st.subheader("B. Mandatory 'AND' Statements")
+        mandatory_statements = st.multiselect(
+            "Select statements that MUST be met (Optional):", 
+            options=[s for s in ENGLISH_STATEMENTS if s not in threshold_statements],
+            help="Any statement added here operates as a strict YES/NO. The respondent MUST meet this rule regardless of their threshold score."
+        )
+    
+    all_selected = list(set(threshold_statements + mandatory_statements))
+    
+    if all_selected:
+        st.markdown("---")
         st.markdown("### ⚙️ Fine-Tune Statement Logic")
         
         statement_logic = {}
         col_logic1, col_logic2 = st.columns(2)
         
-        for i, stmt in enumerate(selected_statements):
+        for i, stmt in enumerate(all_selected):
             target_col = col_logic1 if i % 2 == 0 else col_logic2
             with target_col:
+                role_label = "(Threshold Pool)" if stmt in threshold_statements else "(Mandatory Rule)"
                 statement_logic[stmt] = st.selectbox(
-                    f"Match requirement for: {stmt[:40]}...",
+                    f"Match requirement for: {stmt[:30]}... {role_label}",
                     options=["Any Agree (1 or 2)", "Agree Completely (1 only)", "Any Disagree (3 or 4)", "Disagree Completely (4 only)"],
                     key=f"logic_{stmt}"
                 )
@@ -194,29 +209,46 @@ if uploaded_file:
         
         col_thresh, col_save = st.columns([2, 1])
         with col_thresh:
-            max_statements = len(selected_statements)
-            threshold = st.slider(
-                "Must meet requirements for at least how many statements?", 
-                min_value=1, max_value=max_statements, value=max(1, int(max_statements * 0.7))
-            )
+            if threshold_statements:
+                max_statements = len(threshold_statements)
+                threshold = st.slider(
+                    "Respondent must meet requirements for at least how many of the Threshold Statements?", 
+                    min_value=1, max_value=max_statements, value=max(1, int(max_statements * 0.7))
+                )
+            else:
+                threshold = 0
+                st.info("No Threshold pool selected. Evaluating Mandatory statements only.")
             
         # =====================================================================
-        # DYNAMIC PREVIEW SIZING CALCULATION
+        # DYNAMIC PREVIEW SIZING CALCULATION (Threshold + AND Logic)
         # =====================================================================
         matches_df = pd.DataFrame(index=st.session_state['df_working'].index)
         
+        # 1. Apply the detailed Logic rules
         for stmt, logic in statement_logic.items():
             if logic == "Any Agree (1 or 2)":
-                matches_df[stmt] = st.session_state['df_working'][stmt].isin([1, 2]).astype(int)
+                matches_df[stmt] = st.session_state['df_working'][stmt].isin([1, 2]).astype(bool)
             elif logic == "Agree Completely (1 only)":
-                matches_df[stmt] = (st.session_state['df_working'][stmt] == 1).astype(int)
+                matches_df[stmt] = (st.session_state['df_working'][stmt] == 1).astype(bool)
             elif logic == "Any Disagree (3 or 4)":
-                matches_df[stmt] = st.session_state['df_working'][stmt].isin([3, 4]).astype(int)
+                matches_df[stmt] = st.session_state['df_working'][stmt].isin([3, 4]).astype(bool)
             elif logic == "Disagree Completely (4 only)":
-                matches_df[stmt] = (st.session_state['df_working'][stmt] == 4).astype(int)
+                matches_df[stmt] = (st.session_state['df_working'][stmt] == 4).astype(bool)
                 
-        temp_count = matches_df.sum(axis=1)
-        temp_segment = (temp_count >= threshold).astype(int)
+        # 2. Evaluate Threshold Pool Matches
+        if threshold_statements:
+            meets_threshold = matches_df[threshold_statements].sum(axis=1) >= threshold
+        else:
+            meets_threshold = pd.Series(True, index=matches_df.index)
+            
+        # 3. Evaluate Mandatory AND Matches
+        if mandatory_statements:
+            meets_mandatory = matches_df[mandatory_statements].all(axis=1)
+        else:
+            meets_mandatory = pd.Series(True, index=matches_df.index)
+            
+        # 4. Combine Both rules into the Final Segment Flag
+        temp_segment = (meets_threshold & meets_mandatory).astype(int)
         
         raw_match = int(temp_segment.sum())
         total_weighted = st.session_state['df_working']['Weight'].sum()
