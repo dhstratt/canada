@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import io
-import pickle
 
 # =====================================================================
 # INITIAL SETUP & PAGE CONFIG
@@ -11,7 +10,7 @@ import pickle
 st.set_page_config(page_title="Market Segment & Landscape Builder", layout="wide")
 
 st.title("🎯 Advanced Market Segment & Landscape Builder")
-st.markdown("Upload your respondent-level Master File or a Saved Workspace to translate attitudes, build segments, and map the competitive landscape.")
+st.markdown("Upload your respondent-level Master File to translate attitudes, store custom segments, and map the competitive landscape.")
 
 # =====================================================================
 # CODEBOOK DICTIONARY (Translates Q-Codes to Plain English)
@@ -55,6 +54,7 @@ PSYCHOGRAPHIC_MAP = {
     "Q22_r8": "I consider my diet to be very healthy"
 }
 
+# Create a clean list of just the English statements for the UI
 ENGLISH_STATEMENTS = list(PSYCHOGRAPHIC_MAP.values())
 
 # =====================================================================
@@ -80,10 +80,12 @@ def load_and_prep_data(file):
     return df
 
 # =====================================================================
-# SIDEBAR: UPLOAD & WORKSPACE MANAGEMENT
+# SIDEBAR: UPLOAD & SESSION STATE INIT
 # =====================================================================
-st.sidebar.header("1. Upload Data or Workspace")
-uploaded_file = st.sidebar.file_uploader("Upload Master File (.csv/.xlsx) or Workspace (.pkl)", type=["csv", "xlsx", "pkl"])
+import pickle
+
+st.sidebar.header("1. Upload Master Data or Workspace")
+uploaded_file = st.sidebar.file_uploader("Upload Respondent-Level File (.csv/.xlsx) or Workspace (.pkl)", type=["csv", "xlsx", "pkl"])
 
 if uploaded_file:
     # -----------------------------------------------------------------
@@ -113,26 +115,22 @@ if uploaded_file:
             
         st.sidebar.success(f"Loaded Master File: {len(df_base)} Respondents!")
     
-    # -----------------------------------------------------------------
-    # SIDEBAR: VARIABLE DEFINITIONS & SAVED SEGMENTS
-    # -----------------------------------------------------------------
     st.sidebar.header("2. Define Your Variables")
-    
-    # Hide english statements, Q codes, Weights, AND Custom Segments from the generic Brand list
+    # Dynamically find brand/demo columns by excluding Q-codes and mapped English statements
     exclude_cols = ENGLISH_STATEMENTS + ["Weight"] + st.session_state.get('created_segments', [])
     brand_cols = st.sidebar.multiselect(
         "Select Brand Usage Columns:", 
         [col for col in df_base.columns if col not in exclude_cols and not col.startswith("Q")]
     )
     
+    # Display saved segments in sidebar
     if st.session_state['created_segments']:
         st.sidebar.markdown("---")
         st.sidebar.subheader("💾 Stored Segments")
         for seg in st.session_state['created_segments']:
             st.sidebar.markdown(f"- `{seg}`")
             
-        if st.sidebar.button("🗑️ Clear All Segments"):
-            # Strip the segment columns out of the working dataframe to reset
+        if st.sidebar.button("🗑️ Clear Stored Segments"):
             st.session_state['df_working'] = st.session_state['df_working'].drop(columns=st.session_state['created_segments'])
             st.session_state['created_segments'] = []
             st.rerun()
@@ -143,7 +141,6 @@ if uploaded_file:
     st.sidebar.markdown("---")
     st.sidebar.subheader("📦 Export Current Workspace")
     
-    # Package current dataframe and segment lists into a secure binary file
     workspace_export = {
         'df_working': st.session_state['df_working'],
         'created_segments': st.session_state['created_segments']
@@ -214,6 +211,8 @@ if uploaded_file:
                             matches_df[stmt] = (st.session_state['df_working'][stmt] == 4).astype(int)
                             
                     st.session_state['df_working']['temp_count'] = matches_df.sum(axis=1)
+                    
+                    # Store as a permanent 1/0 column in the working dataframe
                     st.session_state['df_working'][segment_name] = (st.session_state['df_working']['temp_count'] >= threshold).astype(int)
                     st.session_state['df_working'].drop(columns=['temp_count'], inplace=True)
                     
@@ -260,7 +259,7 @@ if uploaded_file:
                 st.dataframe(df_idx.style.format({"Base %": "{:.1f}%", "Segment %": "{:.1f}%"}))
                 
         # -------------------------------------------------------------
-        # TAB 2: ON-DEMAND CROSSTABS (MRI-Simmons Export Format)
+        # TAB 2: ON-DEMAND CROSSTABS (Fixed Pandas NotImplemented Error)
         # -------------------------------------------------------------
         with tab2:
             st.subheader("Build a Custom Crosstab")
@@ -331,6 +330,7 @@ if uploaded_file:
                         
                     export_data.append(r_data)
                 
+                # 1. FLAT STRUCTURE FOR STREAMLIT PREVIEW (Prevents PyArrow Bug)
                 preview_headers = ["Statement"]
                 metrics = ["Unweighted", "Weighted", "Vertical(%)", "Horizontal(%)", "Index"]
                 
@@ -352,6 +352,7 @@ if uploaded_file:
                 
                 st.dataframe(df_preview.head(10).style.format(format_dict))
                 
+                # 2. MULTI-INDEX STRUCTURE FOR EXCEL EXPORT
                 excel_headers = ["Statement", "Study Universe", "", "", "", ""]
                 excel_sub_headers = ["", "Unweighted", "Weighted", "Vertical(%)", "Horizontal(%)", "Index"]
                 
@@ -359,8 +360,12 @@ if uploaded_file:
                     excel_headers.extend([c, "", "", "", ""])
                     excel_sub_headers.extend(["Unweighted", "Weighted", "Vertical(%)", "Horizontal(%)", "Index"])
                     
-                df_excel = pd.DataFrame(export_data, columns=excel_headers)
+                # Creating the dataframe WITHOUT supplying columns in the constructor to avoid duplicate header conflicts
+                df_excel = pd.DataFrame(export_data)
                 df_excel.columns = pd.MultiIndex.from_tuples(zip(excel_headers, excel_sub_headers))
+                
+                # THIS FIXES THE BUG: Set the 'Statement' column to act as the true DataFrame index
+                df_excel = df_excel.set_index(("Statement", ""))
                 
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -374,7 +379,9 @@ if uploaded_file:
                         [""]
                     ])
                     meta_data.to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
-                    df_excel.to_excel(writer, index=False, sheet_name='Crosstab', startrow=9)
+                    
+                    # By passing index=True, Pandas perfectly formats the multi-index headers over our "Statement" index rows
+                    df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
                     
                 output.seek(0)
                 
