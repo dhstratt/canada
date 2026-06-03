@@ -8,14 +8,15 @@ import pickle
 # =====================================================================
 # INITIAL SETUP & PAGE CONFIG
 # =====================================================================
-st.set_page_config(page_title="Market Segment & Landscape Builder", layout="wide")
+st.set_page_config(page_title="Universal Market Mapper", layout="wide")
 
-st.title("🎯 Advanced Market Segment & Landscape Builder")
-st.markdown("Upload your respondent-level Master File or a Saved Workspace to translate attitudes, build segments, and map the competitive landscape.")
+st.title("🎯 Universal Market Segment & Landscape Builder")
+st.markdown("Upload your raw survey data. Build custom segments and crosstabs using attitudes, brands, and demographics simultaneously.")
 
 # =====================================================================
-# CODEBOOK DICTIONARY (Translates Q-Codes to Plain English)
+# THE MEGA-CODEBOOK
 # =====================================================================
+# 1. Psychographics (1-4 Scale)
 PSYCHOGRAPHIC_MAP = {
     "Q19_r1": "I thrive at big parties and social occasions",
     "Q19_r2": "I think of myself as an intellectual",
@@ -55,10 +56,31 @@ PSYCHOGRAPHIC_MAP = {
     "Q22_r8": "I consider my diet to be very healthy"
 }
 
-ENGLISH_STATEMENTS = list(PSYCHOGRAPHIC_MAP.values())
+# 2. Q1 Brands (Binary 1/0)
+BRAND_MAP = {
+    "Q1_1": "Brand: Simply", "Q1_2": "Brand: Minute Maid", "Q1_3": "Brand: Fruitopia", 
+    "Q1_4": "Brand: Five Alive", "Q1_5": "Brand: Honest Kids", "Q1_6": "Brand: Allen's",
+    "Q1_7": "Brand: Compliments", "Q1_8": "Brand: Del Monte", "Q1_9": "Brand: Dole",
+    "Q1_10": "Brand: Fruité", "Q1_11": "Brand: Great Value", "Q1_12": "Brand: Kiju",
+    "Q1_13": "Brand: Kool-Aid", "Q1_14": "Brand: Natural One", "Q1_15": "Brand: Oasis",
+    "Q1_16": "Brand: Ocean Spray", "Q1_17": "Brand: President’s choice", "Q1_18": "Brand: Rougemont",
+    "Q1_19": "Brand: Rubicon Exotic", "Q1_20": "Brand: Sunny Delight", "Q1_21": "Brand: SunRype",
+    "Q1_22": "Brand: Tradition", "Q1_23": "Brand: Tropicana", "Q1_24": "Brand: Irresistible",
+    "Q1_25": "Brand: Western Family"
+}
 
-# Comprehensive Scale Selection Options
+# 3. Demographics (Categorical to be One-Hot Encoded)
+DEMO_MAP = {
+    "D1": {1: "Gender: Female", 2: "Gender: Male", 3: "Gender: Non-Binary"},
+    "D3": {1: "Marital: Single", 2: "Marital: Married", 3: "Marital: Living with Partner", 4: "Marital: Divorced", 5: "Marital: Separated", 6: "Marital: Widowed"},
+    "D5": {1: "Income: <$25k", 2: "Income: $25k-$50k", 3: "Income: $50k-$75k", 4: "Income: $75k-$100k", 5: "Income: $100k-$150k", 6: "Income: $150k-$200k", 7: "Income: $200k+"},
+    "D8": {1: "Immigration: 1st Gen", 2: "Immigration: 1.5 Gen", 3: "Immigration: 2nd Gen", 4: "Immigration: 3rd Gen"},
+    "D11": {1: "Employ: Full Time", 2: "Employ: Part Time", 4: "Employ: Student", 5: "Employ: Homemaker", 7: "Employ: Retired"}
+}
+
 SCALE_OPTIONS = [
+    "Exact Match / YES (Binary)",
+    "Does Not Match / NO (Binary)",
     "Any Agree (1 or 2 combined)",
     "Agree Completely (1 only)",
     "Agree Somewhat (2 only)",
@@ -77,21 +99,47 @@ def load_and_prep_data(file):
     else:
         df = pd.read_excel(file)
         
+    df_clean = pd.DataFrame()
+    
+    # 1. Bring over Weights and base IDs if present
+    for col in df.columns:
+        if col.lower() == 'weight':
+            df_clean['Weight'] = df[col]
+            break
+    if 'Weight' not in df_clean.columns:
+        df_clean['Weight'] = 1.0
+        
+    # 2. Translate Psychographics
     for q_code, english_stmt in PSYCHOGRAPHIC_MAP.items():
         if q_code in df.columns:
-            df[english_stmt] = df[q_code]
-    
-    if "weight" not in df.columns.str.lower():
-        df["Weight"] = 1.0
-    else:
-        weight_col = [c for c in df.columns if c.lower() == 'weight'][0]
-        df.rename(columns={weight_col: 'Weight'}, inplace=True)
-        
-    return df
+            df_clean[english_stmt] = pd.to_numeric(df[q_code], errors='coerce').fillna(0)
+            
+    # 3. Translate Brands
+    for q_code, brand_name in BRAND_MAP.items():
+        if q_code in df.columns:
+            df_clean[brand_name] = pd.to_numeric(df[q_code], errors='coerce').fillna(0).astype(int)
+            
+    # 4. Expand Demographics into Binary Columns
+    for col, value_map in DEMO_MAP.items():
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            for val, demo_label in value_map.items():
+                df_clean[demo_label] = (df[col] == val).astype(int)
+                
+    # 5. Bring over any remaining columns cleanly just in case
+    exclude = list(PSYCHOGRAPHIC_MAP.keys()) + list(BRAND_MAP.keys()) + list(DEMO_MAP.keys())
+    for col in df.columns:
+        if col not in exclude and col.lower() != 'weight':
+            df_clean[col] = df[col]
+            
+    return df_clean
 
-# Helper function to generate boolean filter mask based on scale selections
 def get_scale_mask(dataframe, column_name, logic_string):
-    if logic_string == "Any Agree (1 or 2 combined)":
+    if logic_string == "Exact Match / YES (Binary)":
+        return dataframe[column_name] == 1
+    elif logic_string == "Does Not Match / NO (Binary)":
+        return dataframe[column_name] == 0
+    elif logic_string == "Any Agree (1 or 2 combined)":
         return dataframe[column_name].isin([1, 2])
     elif logic_string == "Agree Completely (1 only)":
         return dataframe[column_name] == 1
@@ -103,7 +151,7 @@ def get_scale_mask(dataframe, column_name, logic_string):
         return dataframe[column_name] == 4
     elif logic_string == "Any Disagree (3 or 4 combined)":
         return dataframe[column_name].isin([3, 4])
-    return dataframe[column_name].isin([1, 2]) # Safe default fallback
+    return dataframe[column_name] == 1 
 
 # =====================================================================
 # SIDEBAR: UPLOAD & WORKSPACE MANAGEMENT
@@ -112,9 +160,6 @@ st.sidebar.header("1. Upload Data or Workspace")
 uploaded_file = st.sidebar.file_uploader("Upload Master File (.csv/.xlsx) or Workspace (.pkl)", type=["csv", "xlsx", "pkl"])
 
 if uploaded_file:
-    # -----------------------------------------------------------------
-    # WORKSPACE RESTORATION (.pkl)
-    # -----------------------------------------------------------------
     if uploaded_file.name.endswith('.pkl'):
         if 'data_loaded' not in st.session_state or st.session_state.get('file_name') != uploaded_file.name:
             workspace = pickle.loads(uploaded_file.getvalue())
@@ -122,13 +167,8 @@ if uploaded_file:
             st.session_state['created_segments'] = workspace['created_segments']
             st.session_state['data_loaded'] = True
             st.session_state['file_name'] = uploaded_file.name
-            
         df_base = st.session_state['df_working']
         st.sidebar.success(f"Workspace Restored! Loaded {len(st.session_state['created_segments'])} Custom Segments.")
-        
-    # -----------------------------------------------------------------
-    # NEW DATA INGESTION (.csv / .xlsx)
-    # -----------------------------------------------------------------
     else:
         df_base = load_and_prep_data(uploaded_file)
         if 'data_loaded' not in st.session_state or st.session_state.get('file_name') != uploaded_file.name:
@@ -136,28 +176,18 @@ if uploaded_file:
             st.session_state['created_segments'] = []
             st.session_state['data_loaded'] = True
             st.session_state['file_name'] = uploaded_file.name
-            
         st.sidebar.success(f"Loaded Master File: {len(df_base)} Respondents!")
     
-    # -----------------------------------------------------------------
-    # SIDEBAR: VARIABLE DEFINITIONS & SAVED SEGMENTS
-    # -----------------------------------------------------------------
-    st.sidebar.header("2. Define Your Variables")
-    
-    exclude_cols = ENGLISH_STATEMENTS + ["Weight"] + st.session_state.get('created_segments', [])
-    brand_cols = st.sidebar.multiselect(
-        "Select Brand Usage Columns:", 
-        [col for col in df_base.columns if col not in exclude_cols and not col.startswith("Q")]
-    )
+    # Generate Universal List of all clean available columns
+    all_available_vars = [c for c in st.session_state['df_working'].columns if c != "Weight" and c not in st.session_state['created_segments']]
     
     if st.session_state['created_segments']:
         st.sidebar.markdown("---")
         st.sidebar.subheader("💾 Stored Segments")
-        
         for seg in st.session_state['created_segments']:
             col_name, col_del = st.sidebar.columns([4, 1])
             col_name.markdown(f"`{seg}`")
-            if col_del.button("❌", key=f"del_{seg}", help=f"Delete {seg}"):
+            if col_del.button("❌", key=f"del_{seg}"):
                 st.session_state['df_working'] = st.session_state['df_working'].drop(columns=[seg])
                 st.session_state['created_segments'].remove(seg)
                 st.rerun()
@@ -168,24 +198,17 @@ if uploaded_file:
             st.session_state['created_segments'] = []
             st.rerun()
 
-    # -----------------------------------------------------------------
-    # SIDEBAR: WORKSPACE DOWNLOADER
-    # -----------------------------------------------------------------
     st.sidebar.markdown("---")
     st.sidebar.subheader("📦 Export Current Workspace")
-    
     workspace_export = {
         'df_working': st.session_state['df_working'],
         'created_segments': st.session_state['created_segments']
     }
-    pkl_bytes = pickle.dumps(workspace_export)
-    
     st.sidebar.download_button(
         label="💾 Download Workspace (.pkl)",
-        data=pkl_bytes,
+        data=pickle.dumps(workspace_export),
         file_name="my_segment_workspace.pkl",
-        mime="application/octet-stream",
-        help="Download this snapshot to save your progress. Re-upload it later to restore all your custom segments instantly."
+        mime="application/octet-stream"
     )
 
     # =====================================================================
@@ -199,24 +222,24 @@ if uploaded_file:
     with col_pool:
         st.subheader("A. Threshold Statement Pool")
         threshold_statements = st.multiselect(
-            "Select statements for the 'Count' requirement:", 
-            options=ENGLISH_STATEMENTS,
-            help="These statements are tied to the threshold slider (e.g., Must meet 3 out of these 5)."
+            "Select variables for the 'Count' requirement:", 
+            options=all_available_vars,
+            help="These variables are tied to the threshold slider (e.g., Must meet 3 out of these 5)."
         )
         
     with col_mand:
         st.subheader("B. Mandatory 'AND' Statements")
         mandatory_statements = st.multiselect(
-            "Select statements that MUST be met (Optional):", 
-            options=[s for s in ENGLISH_STATEMENTS if s not in threshold_statements],
-            help="Any statement added here operates as a strict YES/NO. The respondent MUST meet this rule regardless of their threshold score."
+            "Select variables that MUST be met (Optional):", 
+            options=[s for s in all_available_vars if s not in threshold_statements],
+            help="Any variable added here operates as a strict YES/NO. The respondent MUST meet this rule regardless of their threshold score."
         )
     
     all_selected = list(set(threshold_statements + mandatory_statements))
     
     if all_selected:
         st.markdown("---")
-        st.markdown("### ⚙️ Fine-Tune Statement Logic")
+        st.markdown("### ⚙️ Fine-Tune Logic")
         
         statement_logic = {}
         col_logic1, col_logic2 = st.columns(2)
@@ -225,9 +248,14 @@ if uploaded_file:
             target_col = col_logic1 if i % 2 == 0 else col_logic2
             with target_col:
                 role_label = "(Threshold Pool)" if stmt in threshold_statements else "(Mandatory Rule)"
+                
+                # Auto-detect if it's a binary demo/brand vs a 1-4 scale attitude to set a smart default
+                default_logic = 0 if "Brand:" in stmt or "Gender:" in stmt or "Income:" in stmt or "Marital:" in stmt else 2
+                
                 statement_logic[stmt] = st.selectbox(
                     f"Match requirement for: {stmt[:30]}... {role_label}",
                     options=SCALE_OPTIONS,
+                    index=default_logic,
                     key=f"logic_{stmt}"
                 )
         
@@ -245,9 +273,6 @@ if uploaded_file:
                 threshold = 0
                 st.info("No Threshold pool selected. Evaluating Mandatory statements only.")
             
-        # =====================================================================
-        # DYNAMIC PREVIEW SIZING CALCULATION (Threshold + AND Logic)
-        # =====================================================================
         matches_df = pd.DataFrame(index=st.session_state['df_working'].index)
         
         for stmt, logic in statement_logic.items():
@@ -288,75 +313,60 @@ if uploaded_file:
     # =====================================================================
     # OUTPUT TABS: PROFILER, CROSSTABS, & MAPS
     # =====================================================================
-    if brand_cols or st.session_state['created_segments']:
-        tab1, tab2, tab3 = st.tabs(["🎯 Segment Profiler", "📊 On-Demand Crosstabs", "🗺️ Landscape Map"])
+    if st.session_state['created_segments']:
+        tab1, tab2, tab3 = st.tabs(["🎯 Segment Profiler", "📊 Universal Crosstabs", "🗺️ Landscape Map"])
         
         # -------------------------------------------------------------
         # TAB 1: SEGMENT PROFILER
         # -------------------------------------------------------------
         with tab1:
-            st.subheader("Brand & Product Indexing")
-            if not st.session_state['created_segments']:
-                st.info("Save a custom segment above to see what brands they over-index on.")
-            elif not brand_cols:
-                st.info("Select Brand columns in the sidebar to see indexing.")
-            else:
-                target_segment = st.selectbox("Select Stored Segment to Profile:", st.session_state['created_segments'])
-                
+            st.subheader("Segment Indexing")
+            target_segment = st.selectbox("Select Stored Segment to Profile:", st.session_state['created_segments'])
+            profile_vars = st.multiselect("Select Variables to Profile against:", all_available_vars, default=[c for c in all_available_vars if "Brand:" in c][:10])
+            
+            if profile_vars:
                 index_data = []
-                for brand in brand_cols:
-                    total_brand_buyers = st.session_state['df_working'][st.session_state['df_working'][brand] == 1]['Weight'].sum()
+                for var in profile_vars:
+                    # Assuming 1 is the 'target' value for the profile variables
+                    total_var_buyers = st.session_state['df_working'][st.session_state['df_working'][var] == 1]['Weight'].sum()
                     total_pop = st.session_state['df_working']['Weight'].sum()
-                    baseline_pct = total_brand_buyers / total_pop if total_pop > 0 else 0
+                    baseline_pct = total_var_buyers / total_pop if total_pop > 0 else 0
                     
                     seg_pop = st.session_state['df_working'][st.session_state['df_working'][target_segment] == 1]['Weight'].sum()
-                    seg_brand_buyers = st.session_state['df_working'][(st.session_state['df_working'][target_segment] == 1) & (st.session_state['df_working'][brand] == 1)]['Weight'].sum()
-                    seg_pct = seg_brand_buyers / seg_pop if seg_pop > 0 else 0
+                    seg_var_buyers = st.session_state['df_working'][(st.session_state['df_working'][target_segment] == 1) & (st.session_state['df_working'][var] == 1)]['Weight'].sum()
+                    seg_pct = seg_var_buyers / seg_pop if seg_pop > 0 else 0
                     
                     idx_score = (seg_pct / baseline_pct * 100) if baseline_pct > 0 else 100
-                    index_data.append({"Brand": brand, "Base %": baseline_pct*100, "Segment %": seg_pct*100, "Index Score": int(idx_score)})
+                    index_data.append({"Variable": var, "Base %": baseline_pct*100, "Segment %": seg_pct*100, "Index Score": int(idx_score)})
                 
                 df_idx = pd.DataFrame(index_data).sort_values(by="Index Score", ascending=False)
-                
                 st.metric("Total Size of Segment", f"{int(seg_pop):,}", f"{(seg_pop/total_pop)*100:.1f}% of Market")
                 st.dataframe(df_idx.style.format({"Base %": "{:.1f}%", "Segment %": "{:.1f}%"}))
                 
         # -------------------------------------------------------------
-        # TAB 2: ON-DEMAND CROSSTABS
+        # TAB 2: UNIVERSAL CROSSTABS
         # -------------------------------------------------------------
         with tab2:
             st.subheader("Build a Custom Crosstab")
             
-            ct_rows = st.multiselect(
-                "Select Rows (e.g., Attitudes):", 
-                ENGLISH_STATEMENTS, 
-                default=ENGLISH_STATEMENTS[:5], 
-                key="ct_rows"
-            )
+            ct_rows = st.multiselect("Select Rows:", all_available_vars, key="ct_rows")
             
-            # Row Logic Expander with Full Scales
             ct_row_logic = {}
             if ct_rows:
-                with st.expander("⚙️ Fine-Tune Row Agreement Levels (Optional)", expanded=False):
-                    st.markdown("Change how agreement is calculated for specific rows in your crosstab. **Defaults to Any Agree**.")
+                with st.expander("⚙️ Fine-Tune Row Logic (Optional)", expanded=False):
                     col_rl1, col_rl2 = st.columns(2)
                     for i, r in enumerate(ct_rows):
                         t_col = col_rl1 if i % 2 == 0 else col_rl2
                         with t_col:
+                            default_logic = 0 if "Brand:" in r or "Gender:" in r or "Income:" in r or "Marital:" in r else 2
                             ct_row_logic[r] = st.selectbox(
                                 f"{r[:40]}...",
                                 options=SCALE_OPTIONS,
+                                index=default_logic,
                                 key=f"ct_logic_{r}"
                             )
             
-            available_cols = list(brand_cols) + st.session_state['created_segments']
-                
-            ct_cols = st.multiselect(
-                "Select Columns (e.g., Brands or Stored Segments):", 
-                available_cols, 
-                default=st.session_state['created_segments'] if st.session_state['created_segments'] else (available_cols[:1] if available_cols else []),
-                key="ct_cols"
-            )
+            ct_cols = st.multiselect("Select Columns:", all_available_vars + st.session_state['created_segments'], default=st.session_state['created_segments'], key="ct_cols")
             
             if ct_rows and ct_cols:
                 total_unweighted = len(st.session_state['df_working'])
@@ -370,19 +380,12 @@ if uploaded_file:
                     col_unweighted = len(st.session_state['df_working'][st.session_state['df_working'][c] == 1])
                     col_weighted = st.session_state['df_working'][st.session_state['df_working'][c] == 1]['Weight'].sum()
                     col_baselines[c] = {"unw": col_unweighted, "wgt": col_weighted}
-                    
-                    universe_row.extend([
-                        col_unweighted,
-                        1.00, 
-                        (col_weighted / total_weighted) if total_weighted > 0 else 0, 
-                        100 
-                    ])
+                    universe_row.extend([col_unweighted, 1.00, (col_weighted / total_weighted) if total_weighted > 0 else 0, 100])
                     
                 export_data.append(universe_row)
                 
-                # Apply Custom Multi-Scale Logic to Rows
                 for r in ct_rows:
-                    logic = ct_row_logic.get(r, "Any Agree (1 or 2 combined)")
+                    logic = ct_row_logic.get(r, "Exact Match / YES (Binary)")
                     r_mask = get_scale_mask(st.session_state['df_working'], r, logic)
                     
                     short_suffix = logic.split(" (")[0]
@@ -396,120 +399,75 @@ if uploaded_file:
                     
                     for c in ct_cols:
                         c_mask = st.session_state['df_working'][c] == 1
-                        
                         cross_unweighted = len(st.session_state['df_working'][r_mask & c_mask])
                         cross_weighted = st.session_state['df_working'][r_mask & c_mask]['Weight'].sum()
                         
                         col_wgt_base = col_baselines[c]["wgt"]
-                        
                         vert_pct = (cross_weighted / col_wgt_base) if col_wgt_base > 0 else 0
                         horz_pct = (cross_weighted / stmt_weighted) if stmt_weighted > 0 else 0
                         idx_score = (vert_pct / stmt_vert_pct * 100) if stmt_vert_pct > 0 else 0
                         
-                        r_data.extend([
-                            cross_unweighted,
-                            vert_pct,
-                            horz_pct,
-                            int(round(idx_score, 0))
-                        ])
+                        r_data.extend([cross_unweighted, vert_pct, horz_pct, int(round(idx_score, 0))])
                         
                     export_data.append(r_data)
                 
-                # 1. FLAT STRUCTURE FOR STREAMLIT PREVIEW
                 preview_headers = ["Statement"]
                 metrics = ["Unweighted", "Vertical(%)", "Horizontal(%)", "Index"]
-                
-                for m in metrics:
-                    preview_headers.append(f"Study Universe - {m}")
+                for m in metrics: preview_headers.append(f"Study Universe - {m}")
                 for c in ct_cols:
-                    for m in metrics:
-                        preview_headers.append(f"{c} - {m}")
+                    for m in metrics: preview_headers.append(f"{c} - {m}")
                         
                 df_preview = pd.DataFrame(export_data, columns=preview_headers).set_index("Statement")
                 
                 st.markdown("**Preview (First 10 Rows):**")
-                
                 format_dict = {}
                 for col in df_preview.columns:
-                    if "Vertical" in col or "Horizontal" in col:
-                        format_dict[col] = "{:.1%}" 
-                    elif "Unweighted" in col:
-                        format_dict[col] = "{:,.0f}"
-                    elif "Index" in col:
-                        format_dict[col] = "{:.0f}"
-                
+                    if "Vertical" in col or "Horizontal" in col: format_dict[col] = "{:.1%}" 
+                    elif "Unweighted" in col: format_dict[col] = "{:,.0f}"
+                    elif "Index" in col: format_dict[col] = "{:.0f}"
                 st.dataframe(df_preview.head(10).style.format(format_dict))
                 
-                # 2. MULTI-INDEX STRUCTURE FOR EXCEL EXPORT (Fixed Index Constraint)
                 excel_headers = ["Statement", "Study Universe", "", "", ""] 
                 excel_sub_headers = ["", "Unweighted", "Vertical(%)", "Horizontal(%)", "Index"]
-                
                 for c in ct_cols:
                     excel_headers.extend([c, "", "", ""])
                     excel_sub_headers.extend(["Unweighted", "Vertical(%)", "Horizontal(%)", "Index"])
                     
-                df_excel = pd.DataFrame(export_data)
-                # Lock row identifiers to the DataFrame Index position BEFORE applying MultiIndex mapping columns
-                df_excel = df_excel.set_index(0)
+                df_excel = pd.DataFrame(export_data).set_index(0)
                 df_excel.index.name = "Statement"
-                
                 df_excel.columns = pd.MultiIndex.from_tuples(zip(excel_headers[1:], excel_sub_headers[1:]))
                 
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    meta_data = pd.DataFrame([
-                        ["CROSSTAB TITLE : Custom Segment Profiles"],
-                        ["STUDY NAME : Advanced Market Mapper"],
-                        ["WEIGHT TYPE : Unweighted / Population"],
-                        ["DATE EXECUTED : Auto-Generated"],
-                        [""],
-                        ["SELECTED BASE : Study Universe"],
-                        [""]
-                    ])
-                    meta_data.to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
+                    pd.DataFrame([["CROSSTAB TITLE : Universal Crosstabs"], ["STUDY NAME : Advanced Market Mapper"], ["WEIGHT TYPE : Unweighted / Population"], ["SELECTED BASE : Study Universe"]]).to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
                     df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
                     
-                    # NATIVE EXCEL FORMATTING VIA OPENPYXL
-                    workbook = writer.book
                     worksheet = writer.sheets['Crosstab']
-                    
                     for row in worksheet.iter_rows(min_row=12, max_row=worksheet.max_row):
                         for cell in row:
-                            if cell.column == 1:
-                                continue  
-                            
+                            if cell.column == 1: continue  
                             col_mod = (cell.column - 1) % 4
-                            if col_mod in [2, 3]:   
-                                cell.number_format = '0.1%'
-                            elif col_mod == 1:      
-                                cell.number_format = '#,##0'
-                            elif col_mod == 0:      
-                                cell.number_format = '0'
+                            if col_mod in [2, 3]: cell.number_format = '0.1%'
+                            elif col_mod == 1: cell.number_format = '#,##0'
+                            elif col_mod == 0: cell.number_format = '0'
                                 
                 output.seek(0)
-                
-                st.download_button(
-                    label="📥 Download MRI-Formatted Excel Crosstab",
-                    data=output,
-                    file_name="MRI_Format_Crosstab.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    type="primary"
-                )
+                st.download_button(label="📥 Download MRI-Formatted Excel Crosstab", data=output, file_name="Universal_Crosstab.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
                 
         # -------------------------------------------------------------
         # TAB 3: LANDSCAPE MAP
         # -------------------------------------------------------------
         with tab3:
             st.subheader("Competitive Landscape Map")
-            map_rows = st.multiselect("Select Core Values (Rows) to map:", ENGLISH_STATEMENTS, default=ENGLISH_STATEMENTS[:5])
-            map_cols = st.multiselect("Select Columns (Brands/Segments) to map:", available_cols, default=brand_cols[:5] if brand_cols else available_cols[:3])
+            map_rows = st.multiselect("Select Core Values (Rows) to map:", all_available_vars, default=[c for c in all_available_vars if "Brand:" not in c][:5])
+            map_cols = st.multiselect("Select Columns (Brands/Segments) to map:", all_available_vars + st.session_state['created_segments'], default=[c for c in all_available_vars if "Brand:" in c][:3])
             
             if st.button("🗺️ Generate Map") and map_rows and len(map_cols) > 1:
                 map_matrix = []
                 for r in map_rows:
                     r_data = []
                     for c in map_cols:
-                        val = st.session_state['df_working'][(st.session_state['df_working'][r].isin([1, 2])) & (st.session_state['df_working'][c] == 1)]['Weight'].sum()
+                        val = st.session_state['df_working'][(st.session_state['df_working'][r] == 1) & (st.session_state['df_working'][c] == 1)]['Weight'].sum()
                         r_data.append(val)
                     map_matrix.append(r_data)
                 
@@ -530,27 +488,14 @@ if uploaded_file:
                     var_exp = (D_sv**2 / sum(D_sv**2)) * 100
                     
                     fig, ax = plt.subplots(figsize=(10, 8))
-                    
                     ax.scatter(row_coords[:, 0], row_coords[:, 1], color='steelblue', s=60)
-                    for i, txt in enumerate(df_map.index):
-                        ax.annotate(txt[:25]+"...", (row_coords[i, 0], row_coords[i, 1] + 0.005), color='darkblue', fontsize=9)
-                        
+                    for i, txt in enumerate(df_map.index): ax.annotate(txt[:25]+"...", (row_coords[i, 0], row_coords[i, 1] + 0.005), color='darkblue', fontsize=9)
                     ax.scatter(col_coords[:, 0], col_coords[:, 1], color='crimson', marker='s', s=100)
-                    for i, txt in enumerate(df_map.columns):
-                        ax.annotate(txt, (col_coords[i, 0], col_coords[i, 1] - 0.015), color='darkred', fontsize=11, weight='bold')
-                        
+                    for i, txt in enumerate(df_map.columns): ax.annotate(txt, (col_coords[i, 0], col_coords[i, 1] - 0.015), color='darkred', fontsize=11, weight='bold')
                     ax.axhline(0, color='black', linewidth=0.8)
                     ax.axvline(0, color='black', linewidth=0.8)
-                    
-                    max_val = max(np.abs(np.concatenate([row_coords[:, 0], col_coords[:, 0]])).max(), 
-                                  np.abs(np.concatenate([row_coords[:, 1], col_coords[:, 1]])).max()) * 1.2
-                    ax.set_xlim(-max_val, max_val)
-                    ax.set_ylim(-max_val, max_val)
-                    ax.set_xlabel(f"Dimension 1 ({var_exp[0]:.1f}%)")
-                    ax.set_ylabel(f"Dimension 2 ({var_exp[1]:.1f}%)")
-                    ax.grid(alpha=0.2)
                     st.pyplot(fig)
                 else:
-                    st.warning("Not enough data overlap to calculate dimensions. Select more variables.")
+                    st.warning("Not enough data overlap to calculate dimensions.")
 else:
     st.info("⬅️ Please upload the Master Data File in the sidebar to begin.")
