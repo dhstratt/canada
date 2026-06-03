@@ -63,11 +63,10 @@ def load_and_prep_data(file):
     else:
         df = pd.read_excel(file)
         
-    # Translate and recode 4-point scales to Top-2 Box (1=Agree, 0=Disagree)
+    # Translate columns but KEEP the original 1-4 scale for precision logic
     for q_code, english_stmt in PSYCHOGRAPHIC_MAP.items():
         if q_code in df.columns:
-            # 1=Agree completely, 2=Agree somewhat -> Map to 1 (True)
-            df[english_stmt] = df[q_code].apply(lambda x: 1 if x in [1, 2] else 0)
+            df[english_stmt] = df[q_code]
     
     # Initialize unweighted standard if weight column is missing
     if "weight" not in df.columns.str.lower():
@@ -97,7 +96,7 @@ if uploaded_file:
     # MAIN WORKSPACE: CUSTOM SEGMENT BUILDER
     # =====================================================================
     st.header("Step 1: Configure Your Target Mindset Segment")
-    st.markdown("Select statements to bundle together, set your threshold, and define your custom consumer archetype.")
+    st.markdown("Select statements to bundle together, set your exact agreement logic, and define your custom consumer archetype.")
     
     selected_statements = st.multiselect(
         "Which attitude statements define this target segment?", 
@@ -108,14 +107,49 @@ if uploaded_file:
     segment_created = False
     
     if selected_statements:
+        st.markdown("### ⚙️ Fine-Tune Statement Logic")
+        st.markdown("*Specify exactly how a respondent must answer each statement to score a point.*")
+        
+        # Create a dictionary to hold the user's specific logic for each statement
+        statement_logic = {}
+        
+        col_logic1, col_logic2 = st.columns(2)
+        for i, stmt in enumerate(selected_statements):
+            target_col = col_logic1 if i % 2 == 0 else col_logic2
+            with target_col:
+                statement_logic[stmt] = st.selectbox(
+                    f"Match requirement for: {stmt[:40]}...",
+                    options=[
+                        "Any Agree (1 or 2)",
+                        "Agree Completely (1 only)",
+                        "Any Disagree (3 or 4)",
+                        "Disagree Completely (4 only)"
+                    ],
+                    key=f"logic_{stmt}"
+                )
+        
+        st.markdown("---")
         max_statements = len(selected_statements)
         threshold = st.slider(
-            "Respondent must agree with at least how many of these statements?", 
+            "Respondent must meet the requirements for at least how many of these statements?", 
             min_value=1, max_value=max_statements, value=max(1, int(max_statements * 0.7))
         )
         
-        # Calculate Segment
-        df_working['agreement_count'] = df_working[selected_statements].sum(axis=1)
+        # Apply the Custom Logic
+        # Create an empty dataframe to hold the 1/0 matches for each specific rule
+        matches_df = pd.DataFrame(index=df_working.index)
+        
+        for stmt, logic in statement_logic.items():
+            if logic == "Any Agree (1 or 2)":
+                matches_df[stmt] = df_working[stmt].isin([1, 2]).astype(int)
+            elif logic == "Agree Completely (1 only)":
+                matches_df[stmt] = (df_working[stmt] == 1).astype(int)
+            elif logic == "Any Disagree (3 or 4)":
+                matches_df[stmt] = df_working[stmt].isin([3, 4]).astype(int)
+            elif logic == "Disagree Completely (4 only)":
+                matches_df[stmt] = (df_working[stmt] == 4).astype(int)
+                
+        df_working['agreement_count'] = matches_df.sum(axis=1)
         df_working['Custom_Segment'] = (df_working['agreement_count'] >= threshold).astype(int)
         
         raw_match = int(df_working['Custom_Segment'].sum())
@@ -168,14 +202,14 @@ if uploaded_file:
             if ct_rows and ct_cols:
                 matrix = []
                 for r in ct_rows:
-                    row_data = {"Statement": r}
+                    row_data = {"Statement (Any Agree)": r}
                     for c in ct_cols:
-                        # Sum of weights for respondents who match BOTH the row (1) and column (1)
-                        count = df_working[(df_working[r] == 1) & (df_working[c] == 1)]['Weight'].sum()
+                        # For general crosstabs, we default to Top-2 Box (1 or 2)
+                        count = df_working[(df_working[r].isin([1, 2])) & (df_working[c] == 1)]['Weight'].sum()
                         row_data[c] = round(count)
                     matrix.append(row_data)
                 
-                df_ct = pd.DataFrame(matrix).set_index("Statement")
+                df_ct = pd.DataFrame(matrix).set_index("Statement (Any Agree)")
                 st.dataframe(df_ct)
                 st.download_button("📥 Download Table as CSV", data=df_ct.to_csv().encode('utf-8'), file_name="custom_crosstab.csv", mime="text/csv")
                 
@@ -193,7 +227,8 @@ if uploaded_file:
                 for r in map_rows:
                     r_data = []
                     for c in brand_cols:
-                        val = df_working[(df_working[r] == 1) & (df_working[c] == 1)]['Weight'].sum()
+                        # For general maps, we default to Top-2 Box (1 or 2)
+                        val = df_working[(df_working[r].isin([1, 2])) & (df_working[c] == 1)]['Weight'].sum()
                         r_data.append(val)
                     map_matrix.append(r_data)
                 
