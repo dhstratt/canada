@@ -110,10 +110,9 @@ if uploaded_file:
         st.markdown("### ⚙️ Fine-Tune Statement Logic")
         st.markdown("*Specify exactly how a respondent must answer each statement to score a point.*")
         
-        # Create a dictionary to hold the user's specific logic for each statement
         statement_logic = {}
-        
         col_logic1, col_logic2 = st.columns(2)
+        
         for i, stmt in enumerate(selected_statements):
             target_col = col_logic1 if i % 2 == 0 else col_logic2
             with target_col:
@@ -135,8 +134,6 @@ if uploaded_file:
             min_value=1, max_value=max_statements, value=max(1, int(max_statements * 0.7))
         )
         
-        # Apply the Custom Logic
-        # Create an empty dataframe to hold the 1/0 matches for each specific rule
         matches_df = pd.DataFrame(index=df_working.index)
         
         for stmt, logic in statement_logic.items():
@@ -164,7 +161,7 @@ if uploaded_file:
     # =====================================================================
     # OUTPUT TABS: PROFILER, CROSSTABS, & MAPS
     # =====================================================================
-    if brand_cols:
+    if brand_cols or segment_created:
         tab1, tab2, tab3 = st.tabs(["🎯 Segment Profiler", "📊 On-Demand Crosstabs", "🗺️ Landscape Map"])
         
         # -------------------------------------------------------------
@@ -174,6 +171,8 @@ if uploaded_file:
             st.subheader("Brand & Product Indexing")
             if not segment_created:
                 st.info("Build a custom segment above to see what brands they over-index on.")
+            elif not brand_cols:
+                st.info("Select Brand columns in the sidebar to see indexing.")
             else:
                 index_data = []
                 for brand in brand_cols:
@@ -192,19 +191,37 @@ if uploaded_file:
                 st.dataframe(df_idx.style.format({"Base %": "{:.1f}%", "Segment %": "{:.1f}%"}))
                 
         # -------------------------------------------------------------
-        # TAB 2: ON-DEMAND CROSSTABS
+        # TAB 2: ON-DEMAND CROSSTABS (Now with Custom Segment Columns!)
         # -------------------------------------------------------------
         with tab2:
             st.subheader("Build a Custom Crosstab")
-            ct_rows = st.multiselect("Select Rows (e.g., Attitudes):", list(PSYCHOGRAPHIC_MAP.values()), key="ct_rows")
-            ct_cols = st.multiselect("Select Columns (e.g., Brands):", brand_cols, key="ct_cols")
+            
+            # Default to all 36 psychographics for the rows
+            ct_rows = st.multiselect(
+                "Select Rows (e.g., Attitudes):", 
+                list(PSYCHOGRAPHIC_MAP.values()), 
+                default=list(PSYCHOGRAPHIC_MAP.values()), 
+                key="ct_rows"
+            )
+            
+            # Dynamically add the 'Custom_Segment' to the available columns
+            available_cols = list(brand_cols)
+            if segment_created:
+                available_cols.insert(0, 'Custom_Segment')
+                
+            ct_cols = st.multiselect(
+                "Select Columns (e.g., Brands or Custom Segment):", 
+                available_cols, 
+                default=['Custom_Segment'] if segment_created else [],
+                key="ct_cols"
+            )
             
             if ct_rows and ct_cols:
                 matrix = []
                 for r in ct_rows:
                     row_data = {"Statement (Any Agree)": r}
                     for c in ct_cols:
-                        # For general crosstabs, we default to Top-2 Box (1 or 2)
+                        # Count weights where respondent matches the Row (Top-2 Box) AND the Column (Binary 1)
                         count = df_working[(df_working[r].isin([1, 2])) & (df_working[c] == 1)]['Weight'].sum()
                         row_data[c] = round(count)
                     matrix.append(row_data)
@@ -222,18 +239,16 @@ if uploaded_file:
             map_rows = st.multiselect("Select Core Values (Rows) to map:", list(PSYCHOGRAPHIC_MAP.values()), default=list(PSYCHOGRAPHIC_MAP.values())[:5])
             
             if st.button("🗺️ Generate Map") and map_rows and len(brand_cols) > 1:
-                # Build Matrix for Map
                 map_matrix = []
                 for r in map_rows:
                     r_data = []
                     for c in brand_cols:
-                        # For general maps, we default to Top-2 Box (1 or 2)
                         val = df_working[(df_working[r].isin([1, 2])) & (df_working[c] == 1)]['Weight'].sum()
                         r_data.append(val)
                     map_matrix.append(r_data)
                 
                 df_map = pd.DataFrame(map_matrix, index=map_rows, columns=brand_cols)
-                df_map = df_map.loc[(df_map.sum(axis=1) > 0)] # drop empty rows
+                df_map = df_map.loc[(df_map.sum(axis=1) > 0)] 
                 
                 if len(df_map) >= 2:
                     X = df_map.values.astype(float)
@@ -250,12 +265,10 @@ if uploaded_file:
                     
                     fig, ax = plt.subplots(figsize=(10, 8))
                     
-                    # Plot Attitudes
                     ax.scatter(row_coords[:, 0], row_coords[:, 1], color='steelblue', s=60)
                     for i, txt in enumerate(df_map.index):
                         ax.annotate(txt[:25]+"...", (row_coords[i, 0], row_coords[i, 1] + 0.005), color='darkblue', fontsize=9)
                         
-                    # Plot Brands
                     ax.scatter(col_coords[:, 0], col_coords[:, 1], color='crimson', marker='s', s=100)
                     for i, txt in enumerate(df_map.columns):
                         ax.annotate(txt, (col_coords[i, 0], col_coords[i, 1] - 0.015), color='darkred', fontsize=11, weight='bold')
