@@ -57,6 +57,16 @@ PSYCHOGRAPHIC_MAP = {
 
 ENGLISH_STATEMENTS = list(PSYCHOGRAPHIC_MAP.values())
 
+# Comprehensive Scale Selection Options
+SCALE_OPTIONS = [
+    "Any Agree (1 or 2 combined)",
+    "Agree Completely (1 only)",
+    "Agree Somewhat (2 only)",
+    "Disagree Somewhat (3 only)",
+    "Disagree Completely (4 only)",
+    "Any Disagree (3 or 4 combined)"
+]
+
 # =====================================================================
 # DATA PROCESSING FUNCTIONS
 # =====================================================================
@@ -78,6 +88,22 @@ def load_and_prep_data(file):
         df.rename(columns={weight_col: 'Weight'}, inplace=True)
         
     return df
+
+# Helper function to generate boolean filter mask based on scale selections
+def get_scale_mask(dataframe, column_name, logic_string):
+    if logic_string == "Any Agree (1 or 2 combined)":
+        return dataframe[column_name].isin([1, 2])
+    elif logic_string == "Agree Completely (1 only)":
+        return dataframe[column_name] == 1
+    elif logic_string == "Agree Somewhat (2 only)":
+        return dataframe[column_name] == 2
+    elif logic_string == "Disagree Somewhat (3 only)":
+        return dataframe[column_name] == 3
+    elif logic_string == "Disagree Completely (4 only)":
+        return dataframe[column_name] == 4
+    elif logic_string == "Any Disagree (3 or 4 combined)":
+        return dataframe[column_name].isin([3, 4])
+    return dataframe[column_name].isin([1, 2]) # Safe default fallback
 
 # =====================================================================
 # SIDEBAR: UPLOAD & WORKSPACE MANAGEMENT
@@ -201,7 +227,7 @@ if uploaded_file:
                 role_label = "(Threshold Pool)" if stmt in threshold_statements else "(Mandatory Rule)"
                 statement_logic[stmt] = st.selectbox(
                     f"Match requirement for: {stmt[:30]}... {role_label}",
-                    options=["Any Agree (1 or 2)", "Agree Completely (1 only)", "Any Disagree (3 or 4)", "Disagree Completely (4 only)"],
+                    options=SCALE_OPTIONS,
                     key=f"logic_{stmt}"
                 )
         
@@ -225,14 +251,7 @@ if uploaded_file:
         matches_df = pd.DataFrame(index=st.session_state['df_working'].index)
         
         for stmt, logic in statement_logic.items():
-            if logic == "Any Agree (1 or 2)":
-                matches_df[stmt] = st.session_state['df_working'][stmt].isin([1, 2]).astype(bool)
-            elif logic == "Agree Completely (1 only)":
-                matches_df[stmt] = (st.session_state['df_working'][stmt] == 1).astype(bool)
-            elif logic == "Any Disagree (3 or 4)":
-                matches_df[stmt] = st.session_state['df_working'][stmt].isin([3, 4]).astype(bool)
-            elif logic == "Disagree Completely (4 only)":
-                matches_df[stmt] = (st.session_state['df_working'][stmt] == 4).astype(bool)
+            matches_df[stmt] = get_scale_mask(st.session_state['df_working'], stmt, logic).astype(bool)
                 
         if threshold_statements:
             meets_threshold = matches_df[threshold_statements].sum(axis=1) >= threshold
@@ -315,7 +334,7 @@ if uploaded_file:
                 key="ct_rows"
             )
             
-            # Row Logic Expander
+            # Row Logic Expander with Full Scales
             ct_row_logic = {}
             if ct_rows:
                 with st.expander("⚙️ Fine-Tune Row Agreement Levels (Optional)", expanded=False):
@@ -326,7 +345,7 @@ if uploaded_file:
                         with t_col:
                             ct_row_logic[r] = st.selectbox(
                                 f"{r[:40]}...",
-                                options=["Any Agree (1 or 2)", "Agree Completely (1 only)", "Any Disagree (3 or 4)", "Disagree Completely (4 only)"],
+                                options=SCALE_OPTIONS,
                                 key=f"ct_logic_{r}"
                             )
             
@@ -361,22 +380,13 @@ if uploaded_file:
                     
                 export_data.append(universe_row)
                 
-                # Apply Custom Logic to the Rows
+                # Apply Custom Multi-Scale Logic to Rows
                 for r in ct_rows:
-                    logic = ct_row_logic.get(r, "Any Agree (1 or 2)")
+                    logic = ct_row_logic.get(r, "Any Agree (1 or 2 combined)")
+                    r_mask = get_scale_mask(st.session_state['df_working'], r, logic)
                     
-                    if logic == "Any Agree (1 or 2)":
-                        r_mask = st.session_state['df_working'][r].isin([1, 2])
-                        r_label = f"{r} (Any Agree)"
-                    elif logic == "Agree Completely (1 only)":
-                        r_mask = st.session_state['df_working'][r] == 1
-                        r_label = f"{r} (Agree Completely)"
-                    elif logic == "Any Disagree (3 or 4)":
-                        r_mask = st.session_state['df_working'][r].isin([3, 4])
-                        r_label = f"{r} (Any Disagree)"
-                    elif logic == "Disagree Completely (4 only)":
-                        r_mask = st.session_state['df_working'][r] == 4
-                        r_label = f"{r} (Disagree Completely)"
+                    short_suffix = logic.split(" (")[0]
+                    r_label = f"{r} ({short_suffix})"
                     
                     stmt_unweighted = len(st.session_state['df_working'][r_mask])
                     stmt_weighted = st.session_state['df_working'][r_mask]['Weight'].sum()
@@ -430,7 +440,7 @@ if uploaded_file:
                 
                 st.dataframe(df_preview.head(10).style.format(format_dict))
                 
-                # 2. MULTI-INDEX STRUCTURE FOR EXCEL EXPORT
+                # 2. MULTI-INDEX STRUCTURE FOR EXCEL EXPORT (Fixed Index Constraint)
                 excel_headers = ["Statement", "Study Universe", "", "", ""] 
                 excel_sub_headers = ["", "Unweighted", "Vertical(%)", "Horizontal(%)", "Index"]
                 
@@ -439,9 +449,11 @@ if uploaded_file:
                     excel_sub_headers.extend(["Unweighted", "Vertical(%)", "Horizontal(%)", "Index"])
                     
                 df_excel = pd.DataFrame(export_data)
-                df_excel.columns = pd.MultiIndex.from_tuples(zip(excel_headers, excel_sub_headers))
+                # Lock row identifiers to the DataFrame Index position BEFORE applying MultiIndex mapping columns
+                df_excel = df_excel.set_index(0)
+                df_excel.index.name = "Statement"
                 
-                df_excel = df_excel.set_index(("Statement", ""))
+                df_excel.columns = pd.MultiIndex.from_tuples(zip(excel_headers[1:], excel_sub_headers[1:]))
                 
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -455,25 +467,23 @@ if uploaded_file:
                         [""]
                     ])
                     meta_data.to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
-                    
                     df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
                     
-                    # 3. NATIVE EXCEL FORMATTING VIA OPENPYXL
+                    # NATIVE EXCEL FORMATTING VIA OPENPYXL
                     workbook = writer.book
                     worksheet = writer.sheets['Crosstab']
                     
                     for row in worksheet.iter_rows(min_row=12, max_row=worksheet.max_row):
                         for cell in row:
                             if cell.column == 1:
-                                continue  # Skip Statement text
+                                continue  
                             
                             col_mod = (cell.column - 1) % 4
-                            
-                            if col_mod in [2, 3]:   # Vertical(%) and Horizontal(%)
+                            if col_mod in [2, 3]:   
                                 cell.number_format = '0.1%'
-                            elif col_mod == 1:      # Unweighted Count
+                            elif col_mod == 1:      
                                 cell.number_format = '#,##0'
-                            elif col_mod == 0:      # Index Score
+                            elif col_mod == 0:      
                                 cell.number_format = '0'
                                 
                 output.seek(0)
