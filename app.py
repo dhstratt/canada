@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import io
+import pickle
 
 # =====================================================================
 # INITIAL SETUP & PAGE CONFIG
@@ -10,7 +11,7 @@ import io
 st.set_page_config(page_title="Market Segment & Landscape Builder", layout="wide")
 
 st.title("🎯 Advanced Market Segment & Landscape Builder")
-st.markdown("Upload your respondent-level Master File to translate attitudes, store custom segments, and map the competitive landscape.")
+st.markdown("Upload your respondent-level Master File or a Saved Workspace to translate attitudes, build segments, and map the competitive landscape.")
 
 # =====================================================================
 # CODEBOOK DICTIONARY (Translates Q-Codes to Plain English)
@@ -54,7 +55,6 @@ PSYCHOGRAPHIC_MAP = {
     "Q22_r8": "I consider my diet to be very healthy"
 }
 
-# Create a clean list of just the English statements for the UI
 ENGLISH_STATEMENTS = list(PSYCHOGRAPHIC_MAP.values())
 
 # =====================================================================
@@ -80,37 +80,83 @@ def load_and_prep_data(file):
     return df
 
 # =====================================================================
-# SIDEBAR: UPLOAD & SESSION STATE INIT
+# SIDEBAR: UPLOAD & WORKSPACE MANAGEMENT
 # =====================================================================
-st.sidebar.header("1. Upload Master Data")
-uploaded_file = st.sidebar.file_uploader("Upload Respondent-Level File", type=["csv", "xlsx"])
+st.sidebar.header("1. Upload Data or Workspace")
+uploaded_file = st.sidebar.file_uploader("Upload Master File (.csv/.xlsx) or Workspace (.pkl)", type=["csv", "xlsx", "pkl"])
 
 if uploaded_file:
-    df_base = load_and_prep_data(uploaded_file)
+    # -----------------------------------------------------------------
+    # WORKSPACE RESTORATION (.pkl)
+    # -----------------------------------------------------------------
+    if uploaded_file.name.endswith('.pkl'):
+        if 'data_loaded' not in st.session_state or st.session_state.get('file_name') != uploaded_file.name:
+            workspace = pickle.loads(uploaded_file.getvalue())
+            st.session_state['df_working'] = workspace['df_working']
+            st.session_state['created_segments'] = workspace['created_segments']
+            st.session_state['data_loaded'] = True
+            st.session_state['file_name'] = uploaded_file.name
+            
+        df_base = st.session_state['df_working']
+        st.sidebar.success(f"Workspace Restored! Loaded {len(st.session_state['created_segments'])} Custom Segments.")
+        
+    # -----------------------------------------------------------------
+    # NEW DATA INGESTION (.csv / .xlsx)
+    # -----------------------------------------------------------------
+    else:
+        df_base = load_and_prep_data(uploaded_file)
+        if 'data_loaded' not in st.session_state or st.session_state.get('file_name') != uploaded_file.name:
+            st.session_state['df_working'] = df_base.copy()
+            st.session_state['created_segments'] = []
+            st.session_state['data_loaded'] = True
+            st.session_state['file_name'] = uploaded_file.name
+            
+        st.sidebar.success(f"Loaded Master File: {len(df_base)} Respondents!")
     
-    # Initialize Session State Workspace
-    if 'data_loaded' not in st.session_state or st.session_state.get('file_name') != uploaded_file.name:
-        st.session_state['df_working'] = df_base.copy()
-        st.session_state['created_segments'] = []
-        st.session_state['data_loaded'] = True
-        st.session_state['file_name'] = uploaded_file.name
-
-    st.sidebar.success(f"Loaded {len(df_base)} Respondents!")
-    
+    # -----------------------------------------------------------------
+    # SIDEBAR: VARIABLE DEFINITIONS & SAVED SEGMENTS
+    # -----------------------------------------------------------------
     st.sidebar.header("2. Define Your Variables")
-    brand_cols = st.sidebar.multiselect("Select Brand Usage Columns:", [col for col in df_base.columns if col not in ENGLISH_STATEMENTS and col != "Weight" and not col.startswith("Q")])
     
-    # Display saved segments in sidebar
+    # Hide english statements, Q codes, Weights, AND Custom Segments from the generic Brand list
+    exclude_cols = ENGLISH_STATEMENTS + ["Weight"] + st.session_state.get('created_segments', [])
+    brand_cols = st.sidebar.multiselect(
+        "Select Brand Usage Columns:", 
+        [col for col in df_base.columns if col not in exclude_cols and not col.startswith("Q")]
+    )
+    
     if st.session_state['created_segments']:
         st.sidebar.markdown("---")
         st.sidebar.subheader("💾 Stored Segments")
         for seg in st.session_state['created_segments']:
             st.sidebar.markdown(f"- `{seg}`")
             
-        if st.sidebar.button("🗑️ Clear Stored Segments"):
-            st.session_state['df_working'] = df_base.copy()
+        if st.sidebar.button("🗑️ Clear All Segments"):
+            # Strip the segment columns out of the working dataframe to reset
+            st.session_state['df_working'] = st.session_state['df_working'].drop(columns=st.session_state['created_segments'])
             st.session_state['created_segments'] = []
             st.rerun()
+
+    # -----------------------------------------------------------------
+    # SIDEBAR: WORKSPACE DOWNLOADER
+    # -----------------------------------------------------------------
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📦 Export Current Workspace")
+    
+    # Package current dataframe and segment lists into a secure binary file
+    workspace_export = {
+        'df_working': st.session_state['df_working'],
+        'created_segments': st.session_state['created_segments']
+    }
+    pkl_bytes = pickle.dumps(workspace_export)
+    
+    st.sidebar.download_button(
+        label="💾 Download Workspace (.pkl)",
+        data=pkl_bytes,
+        file_name="my_segment_workspace.pkl",
+        mime="application/octet-stream",
+        help="Download this snapshot to save your progress. Re-upload it later to restore all your custom segments instantly."
+    )
 
     # =====================================================================
     # MAIN WORKSPACE: CUSTOM SEGMENT BUILDER
@@ -168,13 +214,12 @@ if uploaded_file:
                             matches_df[stmt] = (st.session_state['df_working'][stmt] == 4).astype(int)
                             
                     st.session_state['df_working']['temp_count'] = matches_df.sum(axis=1)
-                    
-                    # Store as a permanent 1/0 column in the working dataframe
                     st.session_state['df_working'][segment_name] = (st.session_state['df_working']['temp_count'] >= threshold).astype(int)
                     st.session_state['df_working'].drop(columns=['temp_count'], inplace=True)
                     
                     st.session_state['created_segments'].append(segment_name)
                     st.success(f"✅ '{segment_name}' successfully added to workspace!")
+                    st.rerun()
 
     st.markdown("---")
     
@@ -237,21 +282,11 @@ if uploaded_file:
             )
             
             if ct_rows and ct_cols:
-                # 1. BUILD THE MULTI-METRIC DATA DICTIONARY
                 total_unweighted = len(st.session_state['df_working'])
                 total_weighted = st.session_state['df_working']['Weight'].sum()
                 
                 export_data = []
-                universe_row = ["Study Universe"]
-                
-                # Universe columns (Total Market)
-                universe_row.extend([
-                    total_unweighted, 
-                    total_weighted, 
-                    1.00,  
-                    1.00,  
-                    100    
-                ])
+                universe_row = ["Study Universe", total_unweighted, total_weighted, 1.00, 1.00, 100]
                 
                 col_baselines = {}
                 for c in ct_cols:
@@ -274,14 +309,7 @@ if uploaded_file:
                     stmt_weighted = st.session_state['df_working'][st.session_state['df_working'][r].isin([1, 2])]['Weight'].sum()
                     stmt_vert_pct = (stmt_weighted / total_weighted) if total_weighted > 0 else 0
                     
-                    r_data = [r]
-                    r_data.extend([
-                        stmt_unweighted,
-                        stmt_weighted,
-                        stmt_vert_pct,
-                        1.00, 
-                        100 
-                    ])
+                    r_data = [r, stmt_unweighted, stmt_weighted, stmt_vert_pct, 1.00, 100]
                     
                     for c in ct_cols:
                         cross_unweighted = len(st.session_state['df_working'][(st.session_state['df_working'][r].isin([1, 2])) & (st.session_state['df_working'][c] == 1)])
@@ -303,29 +331,41 @@ if uploaded_file:
                         
                     export_data.append(r_data)
                 
-                # Create Pandas DataFrame
-                headers = ["Statement"]
-                sub_headers = [""]
+                preview_headers = ["Statement"]
+                metrics = ["Unweighted", "Weighted", "Vertical(%)", "Horizontal(%)", "Index"]
                 
-                headers.extend(["Study Universe", "", "", "", ""])
-                sub_headers.extend(["Unweighted", "Weighted", "Vertical(%)", "Horizontal(%)", "Index"])
-                
+                for m in metrics:
+                    preview_headers.append(f"Study Universe - {m}")
                 for c in ct_cols:
-                    headers.extend([c, "", "", "", ""])
-                    sub_headers.extend(["Unweighted", "Weighted", "Vertical(%)", "Horizontal(%)", "Index"])
-                
-                df_export = pd.DataFrame(export_data, columns=headers)
-                df_export.columns = pd.MultiIndex.from_tuples(zip(headers, sub_headers))
+                    for m in metrics:
+                        preview_headers.append(f"{c} - {m}")
+                        
+                df_preview = pd.DataFrame(export_data, columns=preview_headers).set_index("Statement")
                 
                 st.markdown("**Preview (First 10 Rows):**")
-                st.dataframe(df_export.head(10))
+                format_dict = {}
+                for col in df_preview.columns:
+                    if "Vertical" in col or "Horizontal" in col:
+                        format_dict[col] = "{:.1f}%"
+                    elif "Weighted" in col:
+                        format_dict[col] = "{:,.0f}"
                 
-                # EXCEL GENERATOR (MRI-Format)
+                st.dataframe(df_preview.head(10).style.format(format_dict))
+                
+                excel_headers = ["Statement", "Study Universe", "", "", "", ""]
+                excel_sub_headers = ["", "Unweighted", "Weighted", "Vertical(%)", "Horizontal(%)", "Index"]
+                
+                for c in ct_cols:
+                    excel_headers.extend([c, "", "", "", ""])
+                    excel_sub_headers.extend(["Unweighted", "Weighted", "Vertical(%)", "Horizontal(%)", "Index"])
+                    
+                df_excel = pd.DataFrame(export_data, columns=excel_headers)
+                df_excel.columns = pd.MultiIndex.from_tuples(zip(excel_headers, excel_sub_headers))
+                
                 output = io.BytesIO()
-                
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     meta_data = pd.DataFrame([
-                        ["CROSSTAB TITLE : Custom Segment x Core Attitudes"],
+                        ["CROSSTAB TITLE : Custom Segment Profiles"],
                         ["STUDY NAME : Advanced Market Mapper"],
                         ["WEIGHT TYPE : Population"],
                         ["DATE EXECUTED : Auto-Generated"],
@@ -334,7 +374,7 @@ if uploaded_file:
                         [""]
                     ])
                     meta_data.to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
-                    df_export.to_excel(writer, index=False, sheet_name='Crosstab', startrow=9)
+                    df_excel.to_excel(writer, index=False, sheet_name='Crosstab', startrow=9)
                     
                 output.seek(0)
                 
