@@ -303,7 +303,7 @@ if uploaded_file:
                 st.dataframe(df_idx.style.format({"Base %": "{:.1f}%", "Segment %": "{:.1f}%"}))
                 
         # -------------------------------------------------------------
-        # TAB 2: ON-DEMAND CROSSTABS (Unweighted Layout)
+        # TAB 2: ON-DEMAND CROSSTABS
         # -------------------------------------------------------------
         with tab2:
             st.subheader("Build a Custom Crosstab")
@@ -314,6 +314,21 @@ if uploaded_file:
                 default=ENGLISH_STATEMENTS[:5], 
                 key="ct_rows"
             )
+            
+            # Row Logic Expander
+            ct_row_logic = {}
+            if ct_rows:
+                with st.expander("⚙️ Fine-Tune Row Agreement Levels (Optional)", expanded=False):
+                    st.markdown("Change how agreement is calculated for specific rows in your crosstab. **Defaults to Any Agree**.")
+                    col_rl1, col_rl2 = st.columns(2)
+                    for i, r in enumerate(ct_rows):
+                        t_col = col_rl1 if i % 2 == 0 else col_rl2
+                        with t_col:
+                            ct_row_logic[r] = st.selectbox(
+                                f"{r[:40]}...",
+                                options=["Any Agree (1 or 2)", "Agree Completely (1 only)", "Any Disagree (3 or 4)", "Disagree Completely (4 only)"],
+                                key=f"ct_logic_{r}"
+                            )
             
             available_cols = list(brand_cols) + st.session_state['created_segments']
                 
@@ -329,7 +344,6 @@ if uploaded_file:
                 total_weighted = st.session_state['df_working']['Weight'].sum()
                 
                 export_data = []
-                # Remove "Weighted" column logic, just Unw, Vert%, Horz%, Index
                 universe_row = ["Study Universe", total_unweighted, 1.00, 1.00, 100]
                 
                 col_baselines = {}
@@ -347,16 +361,34 @@ if uploaded_file:
                     
                 export_data.append(universe_row)
                 
+                # Apply Custom Logic to the Rows
                 for r in ct_rows:
-                    stmt_unweighted = len(st.session_state['df_working'][st.session_state['df_working'][r].isin([1, 2])])
-                    stmt_weighted = st.session_state['df_working'][st.session_state['df_working'][r].isin([1, 2])]['Weight'].sum()
+                    logic = ct_row_logic.get(r, "Any Agree (1 or 2)")
+                    
+                    if logic == "Any Agree (1 or 2)":
+                        r_mask = st.session_state['df_working'][r].isin([1, 2])
+                        r_label = f"{r} (Any Agree)"
+                    elif logic == "Agree Completely (1 only)":
+                        r_mask = st.session_state['df_working'][r] == 1
+                        r_label = f"{r} (Agree Completely)"
+                    elif logic == "Any Disagree (3 or 4)":
+                        r_mask = st.session_state['df_working'][r].isin([3, 4])
+                        r_label = f"{r} (Any Disagree)"
+                    elif logic == "Disagree Completely (4 only)":
+                        r_mask = st.session_state['df_working'][r] == 4
+                        r_label = f"{r} (Disagree Completely)"
+                    
+                    stmt_unweighted = len(st.session_state['df_working'][r_mask])
+                    stmt_weighted = st.session_state['df_working'][r_mask]['Weight'].sum()
                     stmt_vert_pct = (stmt_weighted / total_weighted) if total_weighted > 0 else 0
                     
-                    r_data = [r, stmt_unweighted, stmt_vert_pct, 1.00, 100]
+                    r_data = [r_label, stmt_unweighted, stmt_vert_pct, 1.00, 100]
                     
                     for c in ct_cols:
-                        cross_unweighted = len(st.session_state['df_working'][(st.session_state['df_working'][r].isin([1, 2])) & (st.session_state['df_working'][c] == 1)])
-                        cross_weighted = st.session_state['df_working'][(st.session_state['df_working'][r].isin([1, 2])) & (st.session_state['df_working'][c] == 1)]['Weight'].sum()
+                        c_mask = st.session_state['df_working'][c] == 1
+                        
+                        cross_unweighted = len(st.session_state['df_working'][r_mask & c_mask])
+                        cross_weighted = st.session_state['df_working'][r_mask & c_mask]['Weight'].sum()
                         
                         col_wgt_base = col_baselines[c]["wgt"]
                         
@@ -399,7 +431,7 @@ if uploaded_file:
                 st.dataframe(df_preview.head(10).style.format(format_dict))
                 
                 # 2. MULTI-INDEX STRUCTURE FOR EXCEL EXPORT
-                excel_headers = ["Statement", "Study Universe", "", "", ""] # 4 total columns for base
+                excel_headers = ["Statement", "Study Universe", "", "", ""] 
                 excel_sub_headers = ["", "Unweighted", "Vertical(%)", "Horizontal(%)", "Index"]
                 
                 for c in ct_cols:
@@ -426,7 +458,7 @@ if uploaded_file:
                     
                     df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
                     
-                    # 3. NATIVE EXCEL FORMATTING VIA OPENPYXL (Updated for 4-column blocks)
+                    # 3. NATIVE EXCEL FORMATTING VIA OPENPYXL
                     workbook = writer.book
                     worksheet = writer.sheets['Crosstab']
                     
