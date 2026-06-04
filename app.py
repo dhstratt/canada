@@ -11,10 +11,10 @@ import pickle
 st.set_page_config(page_title="Universal Market Mapper", layout="wide")
 
 st.title("🎯 Universal Market Segment & Landscape Builder")
-st.markdown("Upload your raw survey data. Build custom segments and crosstabs using every question, attitude, brand, and demographic simultaneously.")
+st.markdown("Upload your raw survey data. **Use the dropdown boxes to search by Question Number (e.g., type 'Q19' or 'D5')** to instantly find what you need.")
 
 # =====================================================================
-# THE MEGA-CODEBOOK DICTIONARIES (COMPLETE)
+# THE MEGA-CODEBOOK DICTIONARIES
 # =====================================================================
 CATEGORIES = {"OJxBuyersQuota": "Orange Juice", "ADExBuyersQuota": "Lemonade & Ades", "OtherJuicexBuyersQuota": "Other Fruit Juices/Blends", "LightxBuyersQuota": "Zero/Light/Lower Sugar"}
 P3M_CATS = {1: "Soda/Pop/Cola", 2: "Tea", 3: "Coffee", 4: "Kombucha", 5: "Juice/Lemonade", 6: "Milk", 7: "Flavored water/seltzer", 8: "Sports drinks", 9: "Energy drinks", 10: "Nectars"}
@@ -78,54 +78,87 @@ def load_and_prep_data(file):
     else: df = pd.read_excel(file)
         
     df_clean = pd.DataFrame()
+    df_valid = pd.DataFrame()
+    
+    if 'Weight' in df.columns: 
+        df_clean['Weight'] = df['Weight']
+        df_valid['Weight'] = df['Weight']
+    else: 
+        df_clean['Weight'] = 1.0
+        df_valid['Weight'] = 1.0
+
+    def add_var(name, val_series, valid_mask):
+        """Helper to simultaneously build the analysis column and its valid base mask"""
+        df_clean[name] = val_series
+        df_valid[name] = valid_mask.astype(int)
 
     # 1. Base Demographics
     for col, value_map in DEMO_MAP.items():
         if col in df.columns:
+            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
             df[col] = pd.to_numeric(df[col], errors='coerce')
             for val, label in value_map.items():
-                df_clean[f"[Demo] {label}"] = (df[col] == val).astype(int)
+                add_var(f"[{col} Demo] {label}", (df[col] == val).astype(int), valid_mask)
                 
-    # 1B. Ethnicities (D6 is a Multi-Select)
     for e_idx, e_name in ETHNICITIES.items():
-        if f"D6_{e_idx}" in df.columns:
-            df_clean[f"[Demo] Ethnicity: {e_name}"] = pd.to_numeric(df[f"D6_{e_idx}"], errors='coerce').fillna(0).astype(int)
+        col = f"D6_{e_idx}"
+        if col in df.columns:
+            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+            add_var(f"[D6 Demo] Ethnicity: {e_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
                 
-    # 1C. Household Size (D2) and Children Ages (D4)
     if 'D2' in df.columns:
-        df['D2'] = pd.to_numeric(df['D2'], errors='coerce').fillna(0)
-        df_clean["[Demo] HH Size: 1 Person"] = (df['D2'] == 1).astype(int)
-        df_clean["[Demo] HH Size: 2 People"] = (df['D2'] == 2).astype(int)
-        df_clean["[Demo] HH Size: 3-4 People"] = ((df['D2'] >= 3) & (df['D2'] <= 4)).astype(int)
-        df_clean["[Demo] HH Size: 5+ People"] = (df['D2'] >= 5).astype(int)
+        valid_mask = pd.to_numeric(df['D2'], errors='coerce').notna()
+        d2 = pd.to_numeric(df['D2'], errors='coerce').fillna(0)
+        add_var("[D2 Demo] HH Size: 1 Person", (d2 == 1).astype(int), valid_mask)
+        add_var("[D2 Demo] HH Size: 2 People", (d2 == 2).astype(int), valid_mask)
+        add_var("[D2 Demo] HH Size: 3-4 People", ((d2 >= 3) & (d2 <= 4)).astype(int), valid_mask)
+        add_var("[D2 Demo] HH Size: 5+ People", (d2 >= 5).astype(int), valid_mask)
 
     d4_cols = [c for c in df.columns if c.startswith('D4_')]
     if d4_cols:
         has_u6 = pd.Series(False, index=df.index)
         has_6_12 = pd.Series(False, index=df.index)
         has_13_17 = pd.Series(False, index=df.index)
+        valid_mask = pd.Series(False, index=df.index)
         for c in d4_cols:
             age_s = pd.to_numeric(df[c], errors='coerce')
+            valid_mask = valid_mask | age_s.notna()
             has_u6 = has_u6 | (age_s < 6)
             has_6_12 = has_6_12 | ((age_s >= 6) & (age_s <= 12))
             has_13_17 = has_13_17 | ((age_s >= 13) & (age_s <= 17))
-        df_clean["[Demo] Has Child <6"] = has_u6.astype(int)
-        df_clean["[Demo] Has Child 6-12"] = has_6_12.astype(int)
-        df_clean["[Demo] Has Child 13-17"] = has_13_17.astype(int)
+        add_var("[D4 Demo] Has Child <6", has_u6.astype(int), valid_mask)
+        add_var("[D4 Demo] Has Child 6-12", has_6_12.astype(int), valid_mask)
+        add_var("[D4 Demo] Has Child 13-17", has_13_17.astype(int), valid_mask)
 
-    # 2. Categories (Quotas & P3M)
+    # 2. Categories
     for q_code, label in CATEGORIES.items():
-        if q_code in df.columns: df_clean[f"[Category] Buyer: {label}"] = pd.to_numeric(df[q_code], errors='coerce').fillna(0).astype(int)
+        if q_code in df.columns: 
+            valid_mask = pd.to_numeric(df[q_code], errors='coerce').notna()
+            add_var(f"[Quota Category] Buyer: {label}", pd.to_numeric(df[q_code], errors='coerce').fillna(0).astype(int), valid_mask)
+            
     for c_idx, c_name in P3M_CATS.items():
-        col = f"S6_r{c_idx}_c1" # c1 = Self
-        if col in df.columns: df_clean[f"[Category] P3M Self: {c_name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+        col = f"S6_r{c_idx}_c1"
+        if col in df.columns: 
+            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+            add_var(f"[S6 Category] P3M Self: {c_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
 
-    # 3. Brands (Q1, Q4, Q5, Q7 Rejectors)
+    # 3. Brands
     for b_idx, b_name in BRANDS.items():
-        if f"Q1_{b_idx}" in df.columns: df_clean[f"[Brand] Purchased: {b_name}"] = pd.to_numeric(df[f"Q1_{b_idx}"], errors='coerce').fillna(0).astype(int)
-        if f"Q4_{b_idx}" in df.columns: df_clean[f"[Rejectors/Favs] HH Favorite: {b_name}"] = pd.to_numeric(df[f"Q4_{b_idx}"], errors='coerce').fillna(0).astype(int)
-        if f"Q5_{b_idx}" in df.columns: df_clean[f"[Brand] Most Recent Purch: {b_name}"] = pd.to_numeric(df[f"Q5_{b_idx}"], errors='coerce').fillna(0).astype(int)
-        if f"Q7_{b_idx}" in df.columns: df_clean[f"[Rejectors/Favs] Never Consider: {b_name}"] = pd.to_numeric(df[f"Q7_{b_idx}"], errors='coerce').fillna(0).astype(int)
+        if f"Q1_{b_idx}" in df.columns: 
+            valid_mask = pd.to_numeric(df[f"Q1_{b_idx}"], errors='coerce').notna()
+            add_var(f"[Q1 Brand] Purchased: {b_name}", pd.to_numeric(df[f"Q1_{b_idx}"], errors='coerce').fillna(0).astype(int), valid_mask)
+            
+        if f"Q4_{b_idx}" in df.columns: 
+            valid_mask = pd.to_numeric(df[f"Q4_{b_idx}"], errors='coerce').notna()
+            add_var(f"[Q4 Rejectors/Favs] HH Favorite: {b_name}", pd.to_numeric(df[f"Q4_{b_idx}"], errors='coerce').fillna(0).astype(int), valid_mask)
+            
+        if f"Q5_{b_idx}" in df.columns: 
+            valid_mask = pd.to_numeric(df[f"Q5_{b_idx}"], errors='coerce').notna()
+            add_var(f"[Q5 Brand] Most Recent Purch: {b_name}", pd.to_numeric(df[f"Q5_{b_idx}"], errors='coerce').fillna(0).astype(int), valid_mask)
+            
+        if f"Q7_{b_idx}" in df.columns: 
+            valid_mask = pd.to_numeric(df[f"Q7_{b_idx}"], errors='coerce').notna()
+            add_var(f"[Q7 Rejectors/Favs] Never Consider: {b_name}", pd.to_numeric(df[f"Q7_{b_idx}"], errors='coerce').fillna(0).astype(int), valid_mask)
 
     # 4. Brand Varieties (Q8)
     q8_cols = [c for c in df.columns if c.startswith('Q8_')]
@@ -134,79 +167,159 @@ def load_and_prep_data(file):
         if len(parts) == 2 and parts[1].isdigit():
             b_idx = int(parts[1])
             b_name = BRANDS.get(b_idx, "Unknown")
-            df_clean[f"[Brand] Variety code {parts[0]} - {b_name}"] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+            add_var(f"[Q8 Brand] Variety code {parts[0]} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
 
-    # 5. Channels (Q2)
+    # 5. Channels & Sizes
     for c_idx, c_name in CHANNELS.items():
         for b_idx, b_name in BRANDS.items():
-            if f"Q2_r{c_idx}_c{b_idx}" in df.columns: df_clean[f"[Channel] {c_name} - {b_name}"] = pd.to_numeric(df[f"Q2_r{c_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
+            col = f"Q2_r{c_idx}_c{b_idx}"
+            if col in df.columns: 
+                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+                add_var(f"[Q2 Channel] {c_name} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
 
-    # 6. Sizes (Q3)
     for s_idx, s_name in SIZES.items():
         for b_idx, b_name in BRANDS.items():
-            if f"Q3_r{s_idx}_c{b_idx}" in df.columns: df_clean[f"[Size] {s_name} - {b_name}"] = pd.to_numeric(df[f"Q3_r{s_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
+            col = f"Q3_r{s_idx}_c{b_idx}"
+            if col in df.columns: 
+                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+                add_var(f"[Q3 Size] {s_name} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
 
     # 7. Why Choose (Q6)
     for w_idx, w_name in WHY_CHOOSE.items():
         for b_idx, b_name in BRANDS.items():
-            if f"Q6_{w_idx}.{b_idx}" in df.columns: df_clean[f"[Why Choose] {w_name} - {b_name}"] = pd.to_numeric(df[f"Q6_{w_idx}.{b_idx}"], errors='coerce').fillna(0).astype(int)
+            col = f"Q6_{w_idx}.{b_idx}"
+            if col in df.columns: 
+                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+                add_var(f"[Q6 Why Choose] {w_name} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
 
     # 8. Who/When/Freq/Reason (Q9, Q9a, Q9b, Q14)
     for w_idx, w_name in WHO_DRINKS.items():
         for b_idx, b_name in BRANDS.items():
-            if f"Q9_r{w_idx}_c{b_idx}" in df.columns: df_clean[f"[Who Drinks] {w_name} - {b_name}"] = pd.to_numeric(df[f"Q9_r{w_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
+            col = f"Q9_r{w_idx}_c{b_idx}"
+            if col in df.columns: 
+                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+                add_var(f"[Q9 Who Drinks] {w_name} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
     
-    # 8B. Other Adult Ages (Q9aa)
     for a_idx, a_name in OTHER_ADULT_AGES.items():
         for b_idx, b_name in BRANDS.items():
-            if f"Q9aa_{a_idx}.{b_idx}" in df.columns: df_clean[f"[Who Drinks] Other Adult ({a_name}) - {b_name}"] = pd.to_numeric(df[f"Q9aa_{a_idx}.{b_idx}"], errors='coerce').fillna(0).astype(int)
+            col = f"Q9aa_{a_idx}.{b_idx}"
+            if col in df.columns: 
+                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+                add_var(f"[Q9aa Who Drinks] Other Adult ({a_name}) - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
 
     for w_idx, w_name in WHEN_HOW.items():
         for b_idx, b_name in BRANDS.items():
-            if f"Q9a_r{w_idx}_c{b_idx}" in df.columns: df_clean[f"[When/How] {w_name} - {b_name}"] = pd.to_numeric(df[f"Q9a_r{w_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
+            col = f"Q9a_r{w_idx}_c{b_idx}"
+            if col in df.columns: 
+                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+                add_var(f"[Q9a When/How] {w_name} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
+                
     for b_idx, b_name in BRANDS.items():
-        if f"Q9b_c{b_idx}" in df.columns:
-            df[f"Q9b_c{b_idx}"] = pd.to_numeric(df[f"Q9b_c{b_idx}"], errors='coerce')
-            for f_idx, f_name in FREQUENCY.items(): df_clean[f"[Frequency] {f_name} - {b_name}"] = (df[f"Q9b_c{b_idx}"] == f_idx).astype(int)
-        if f"Q14_c{b_idx}" in df.columns:
-            df[f"Q14_c{b_idx}"] = pd.to_numeric(df[f"Q14_c{b_idx}"], errors='coerce')
-            for r_idx, r_name in REASONS.items(): df_clean[f"[Reason] {r_name} - {b_name}"] = (df[f"Q14_c{b_idx}"] == r_idx).astype(int)
+        col_freq = f"Q9b_c{b_idx}"
+        if col_freq in df.columns:
+            valid_mask = pd.to_numeric(df[col_freq], errors='coerce').notna()
+            s_num = pd.to_numeric(df[col_freq], errors='coerce')
+            for f_idx, f_name in FREQUENCY.items(): 
+                add_var(f"[Q9b Frequency] {f_name} - {b_name}", (s_num == f_idx).astype(int), valid_mask)
+                
+        col_reas = f"Q14_c{b_idx}"
+        if col_reas in df.columns:
+            valid_mask = pd.to_numeric(df[col_reas], errors='coerce').notna()
+            s_num = pd.to_numeric(df[col_reas], errors='coerce')
+            for r_idx, r_name in REASONS.items(): 
+                add_var(f"[Q14 Reason] {r_name} - {b_name}", (s_num == r_idx).astype(int), valid_mask)
 
     # 9. Buying Styles (Q5a, Q10-Q12, Q15)
-    for r_idx, r_name in RECENT_PURCHASE.items():
-        cols = [c for c in df.columns if c.startswith('Q5a')]
-        if cols:
-            df_clean[f"[Buying Styles] Recent Purch: {r_name}"] = (pd.to_numeric(df[cols[0]], errors='coerce') == r_idx).astype(int)
+    q5_cols = [c for c in df.columns if c.startswith('Q5a')]
+    if q5_cols:
+        valid_mask = pd.to_numeric(df[q5_cols[0]], errors='coerce').notna()
+        s_num = pd.to_numeric(df[q5_cols[0]], errors='coerce')
+        for r_idx, r_name in RECENT_PURCHASE.items():
+            add_var(f"[Q5a Buying Styles] Recent Purch: {r_name}", (s_num == r_idx).astype(int), valid_mask)
+            
     if 'Q15' in df.columns:
+        valid_mask = pd.to_numeric(df['Q15'], errors='coerce').notna()
+        s_num = pd.to_numeric(df['Q15'], errors='coerce')
         for r_idx, r_name in CONSUMPTION_CHANGE.items():
-            df_clean[f"[Buying Styles] Consumption: {r_name}"] = (pd.to_numeric(df['Q15'], errors='coerce') == r_idx).astype(int)
+            add_var(f"[Q15 Buying Styles] Consumption: {r_name}", (s_num == r_idx).astype(int), valid_mask)
             
     q_map = {'Q10': 'OJ', 'Q11': 'Lemonade', 'Q12': 'Other Juice'}
     for q_code, q_label in q_map.items():
         if q_code in df.columns:
-            for l_idx, l_name in LOYALTY_APPROACH.items(): df_clean[f"[Buying Styles] Approach to {q_label}: {l_name}"] = (pd.to_numeric(df[q_code], errors='coerce') == l_idx).astype(int)
+            valid_mask = pd.to_numeric(df[q_code], errors='coerce').notna()
+            s_num = pd.to_numeric(df[q_code], errors='coerce')
+            for l_idx, l_name in LOYALTY_APPROACH.items(): 
+                add_var(f"[{q_code} Buying Styles] Approach to {q_label}: {l_name}", (s_num == l_idx).astype(int), valid_mask)
+                
         for p_idx, p_name in PURCHASE_DRIVERS.items():
-            if f"{q_code}a_{p_idx}" in df.columns: df_clean[f"[Buying Styles] Adult Driver ({q_label}): {p_name}"] = pd.to_numeric(df[f"{q_code}a_{p_idx}"], errors='coerce').fillna(0).astype(int)
-            if f"{q_code}b_{p_idx}" in df.columns: df_clean[f"[Buying Styles] Kids Driver ({q_label}): {p_name}"] = pd.to_numeric(df[f"{q_code}b_{p_idx}"], errors='coerce').fillna(0).astype(int)
+            c_a = f"{q_code}a_{p_idx}"
+            if c_a in df.columns: 
+                valid_mask = pd.to_numeric(df[c_a], errors='coerce').notna()
+                add_var(f"[{q_code}a Buying Styles] Adult Driver ({q_label}): {p_name}", pd.to_numeric(df[c_a], errors='coerce').fillna(0).astype(int), valid_mask)
+            c_b = f"{q_code}b_{p_idx}"
+            if c_b in df.columns: 
+                valid_mask = pd.to_numeric(df[c_b], errors='coerce').notna()
+                add_var(f"[{q_code}b Buying Styles] Kids Driver ({q_label}): {p_name}", pd.to_numeric(df[c_b], errors='coerce').fillna(0).astype(int), valid_mask)
 
     # 10. Core MRI Values (Q18)
     for v_idx, v_name in MRI_VALUES.items():
-        if f"Q18_{v_idx}" in df.columns: df_clean[f"[Psychographics] Core Value: {v_name}"] = pd.to_numeric(df[f"Q18_{v_idx}"], errors='coerce').fillna(0).astype(int)
+        col = f"Q18_{v_idx}"
+        if col in df.columns: 
+            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+            add_var(f"[Q18 Psycho] Core Value: {v_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
 
     # 11. Scales & Attitudes (Q13, Q16, Q17, Q19-Q22)
     for r_idx, r_name in KIDS_ATTITUDES.items():
-        if f"Q13_r{r_idx}" in df.columns: df_clean[f"[Kids Attitudes] {r_name}"] = pd.to_numeric(df[f"Q13_r{r_idx}"], errors='coerce').fillna(0)
+        col = f"Q13_r{r_idx}"
+        if col in df.columns: 
+            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+            add_var(f"[Q13 Kids Attitudes] {r_name}", pd.to_numeric(df[col], errors='coerce').fillna(0), valid_mask)
+            
     for idx, name in BEV_ATTITUDES_1.items():
-        if f"Q16_{idx}" in df.columns: df_clean[f"[Bev Attitudes] {name}"] = pd.to_numeric(df[f"Q16_{idx}"], errors='coerce').fillna(0).astype(int)
+        col = f"Q16_{idx}"
+        if col in df.columns: 
+            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+            add_var(f"[Q16 Bev Attitudes] {name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
+            
     for idx, name in BEV_ATTITUDES_2.items():
-        if f"Q16x2_{idx}" in df.columns: df_clean[f"[Bev Attitudes] {name}"] = pd.to_numeric(df[f"Q16x2_{idx}"], errors='coerce').fillna(0).astype(int)
+        col = f"Q16x2_{idx}"
+        if col in df.columns: 
+            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+            add_var(f"[Q16x2 Bev Attitudes] {name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
+            
     for r_idx, r_name in BRAND_ATTITUDES.items():
         for b_idx, b_name in BRANDS.items():
-            if f"Q17_r{r_idx}_c{b_idx}" in df.columns: df_clean[f"[Brand Attitude] {r_name} - {b_name}"] = pd.to_numeric(df[f"Q17_r{r_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
+            col = f"Q17_r{r_idx}_c{b_idx}"
+            if col in df.columns: 
+                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
+                add_var(f"[Q17 Brand Attitude] {r_name} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
+                
     for q_code, english_stmt in PSYCHOGRAPHICS.items():
-        if q_code in df.columns: df_clean[f"[Psychographics] {english_stmt}"] = pd.to_numeric(df[q_code], errors='coerce').fillna(0)
-            
-    return df_clean
+        if q_code in df.columns: 
+            valid_mask = pd.to_numeric(df[q_code], errors='coerce').notna()
+            add_var(f"[{q_code.split('_')[0]} Psycho] {english_stmt}", pd.to_numeric(df[q_code], errors='coerce').fillna(0), valid_mask)
+
+    # 12. Auto-Catch Any Missing Raw Data
+    known_prefixes = ('S2', 'S3', 'S4', 'S6', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11',
+                      'Q1_', 'Q2_', 'Q3_', 'Q4_', 'Q5_', 'Q5a', 'Q6_', 'Q7_', 'Q8_', 'Q9_', 'Q9a_', 'Q9aa_', 'Q9b_', 
+                      'Q10', 'Q11', 'Q12', 'Q13_', 'Q14_', 'Q15', 'Q16_', 'Q16x2', 'Q17_', 'Q18_', 'Q19_', 'Q20_', 
+                      'Q21_', 'Q22_')
+    ignore_substrings = ['Quota', 'EndQ', 'sys_', 'Data_', 'botCheck', 'captcha', 'IP_', 'Unnamed', 'CS', 'UniqueResp', 'ListPanel', 'OverallStartQ', 'PanelQ', 'S7', 'S5', 'Q7a', 'Q7Resp_', 'Q8Product', 'Q5Product', 'Q7Rejectors', 'Q8Buyers', 'Q18xMRIxCoding', 'StraightxLiners', 'P', 'L1']
+    
+    for c in df.columns:
+        if c == 'Weight': continue
+        if any(sub in c for sub in ignore_substrings): continue
+        if any(c.startswith(p) for p in known_prefixes): continue
+        
+        unique_vals = df[c].dropna().unique()
+        if len(unique_vals) > 1 and len(unique_vals) <= 15:
+            valid_mask = df[c].astype(str).str.strip() != ''
+            for val in unique_vals:
+                if str(val).strip() != '':
+                    add_var(f"[{c} Raw] Answer: {val}", (df[c] == val).astype(int), valid_mask)
+
+    return df_clean, df_valid
 
 def get_scale_mask(dataframe, column_name, logic_string):
     if logic_string == "Exact Match / YES (Binary)": return dataframe[column_name] == 1
@@ -226,41 +339,52 @@ st.sidebar.header("1. Upload Data or Workspace")
 uploaded_file = st.sidebar.file_uploader("Upload Master File (.csv/.xlsx) or Workspace (.pkl)", type=["csv", "xlsx", "pkl"])
 
 if uploaded_file:
-    with st.spinner("Translating raw survey variables into plain English..."):
+    with st.spinner("Analyzing survey logic and building dynamic eligible base engine..."):
         if uploaded_file.name.endswith('.pkl'):
             if 'data_loaded' not in st.session_state or st.session_state.get('file_name') != uploaded_file.name:
                 workspace = pickle.loads(uploaded_file.getvalue())
                 st.session_state['df_working'] = workspace['df_working']
+                
+                # Check for legacy workspaces that didn't have the dynamic base engine
+                if 'df_valid' not in workspace or workspace['df_valid'].empty:
+                    st.session_state['df_valid'] = pd.DataFrame(1, index=workspace['df_working'].index, columns=workspace['df_working'].columns)
+                else:
+                    st.session_state['df_valid'] = workspace['df_valid']
+                    
                 st.session_state['created_segments'] = workspace['created_segments']
                 st.session_state['data_loaded'] = True
                 st.session_state['file_name'] = uploaded_file.name
             st.sidebar.success(f"Workspace Restored! Loaded {len(st.session_state['created_segments'])} Custom Segments.")
         else:
-            df_base = load_and_prep_data(uploaded_file)
+            df_base, df_valid_base = load_and_prep_data(uploaded_file)
+            
+            # Legacy check
             is_legacy_state = False
             if 'df_working' in st.session_state:
-                if not any('Ethnicity: Caucasian' in c for c in st.session_state['df_working'].columns):
+                if not any('[Q19 Psycho]' in c for c in st.session_state['df_working'].columns):
                     is_legacy_state = True
             
             if 'data_loaded' not in st.session_state or st.session_state.get('file_name') != uploaded_file.name or is_legacy_state:
                 st.session_state['df_working'] = df_base.copy()
+                st.session_state['df_valid'] = df_valid_base.copy()
                 st.session_state['created_segments'] = []
                 st.session_state['data_loaded'] = True
                 st.session_state['file_name'] = uploaded_file.name
             st.sidebar.success(f"Loaded Master File: {len(df_base)} Respondents!")
     
-    all_cols = [c for c in st.session_state['df_working'].columns if c not in st.session_state['created_segments']]
+    all_cols = [c for c in st.session_state['df_working'].columns if c != "Weight" and c not in st.session_state['created_segments']]
     
     # UI Categories
-    CAT_DEMOS = [c for c in all_cols if c.startswith("[Demo]")]
-    CAT_CATEGORIES = [c for c in all_cols if c.startswith("[Category]")]
-    CAT_BRANDS = [c for c in all_cols if c.startswith("[Brand]") or c.startswith("[Size]")]
-    CAT_BUYING = [c for c in all_cols if c.startswith("[Buying Styles]")]
-    CAT_FAVS = [c for c in all_cols if c.startswith("[Rejectors/Favs]")]
-    CAT_CHANNELS = [c for c in all_cols if c.startswith("[Channel]") or c.startswith("[When/How]") or c.startswith("[Frequency]") or c.startswith("[Who Drinks]")]
-    CAT_REASONS = [c for c in all_cols if c.startswith("[Why Choose]") or c.startswith("[Reason]")]
-    CAT_ATTITUDES = [c for c in all_cols if c.startswith("[Psychographics]") or c.startswith("[Kids Attitudes]") or c.startswith("[Bev Attitudes]")]
-    CAT_PERCEPTIONS = [c for c in all_cols if c.startswith("[Brand Attitude]")]
+    CAT_DEMOS = [c for c in all_cols if "Demo]" in c]
+    CAT_CATEGORIES = [c for c in all_cols if "Category]" in c]
+    CAT_BRANDS = [c for c in all_cols if "Brand]" in c or "Size]" in c]
+    CAT_BUYING = [c for c in all_cols if "Buying Styles]" in c]
+    CAT_FAVS = [c for c in all_cols if "Rejectors/Favs]" in c]
+    CAT_CHANNELS = [c for c in all_cols if "Channel]" in c or "When/How]" in c or "Frequency]" in c or "Who Drinks]" in c]
+    CAT_REASONS = [c for c in all_cols if "Why Choose]" in c or "Reason]" in c]
+    CAT_ATTITUDES = [c for c in all_cols if "Psycho]" in c or "Kids Attitudes]" in c or "Bev Attitudes]" in c]
+    CAT_PERCEPTIONS = [c for c in all_cols if "Brand Attitude]" in c]
+    CAT_RAW = [c for c in all_cols if "Raw]" in c]
     
     if st.session_state['created_segments']:
         st.sidebar.markdown("---")
@@ -270,12 +394,14 @@ if uploaded_file:
             col_name.markdown(f"`{seg}`")
             if col_del.button("❌", key=f"del_{seg}"):
                 st.session_state['df_working'] = st.session_state['df_working'].drop(columns=[seg])
+                st.session_state['df_valid'] = st.session_state['df_valid'].drop(columns=[seg])
                 st.session_state['created_segments'].remove(seg)
                 st.rerun()
                 
         st.sidebar.markdown("---")
         if st.sidebar.button("🗑️ Clear All Segments", type="secondary"):
             st.session_state['df_working'] = st.session_state['df_working'].drop(columns=st.session_state['created_segments'])
+            st.session_state['df_valid'] = st.session_state['df_valid'].drop(columns=st.session_state['created_segments'])
             st.session_state['created_segments'] = []
             st.rerun()
 
@@ -283,6 +409,7 @@ if uploaded_file:
     st.sidebar.subheader("📦 Export Current Workspace")
     workspace_export = {
         'df_working': st.session_state['df_working'],
+        'df_valid': st.session_state['df_valid'],
         'created_segments': st.session_state['created_segments']
     }
     st.sidebar.download_button("💾 Download Workspace (.pkl)", data=pickle.dumps(workspace_export), file_name="my_segment_workspace.pkl", mime="application/octet-stream")
@@ -298,7 +425,7 @@ if uploaded_file:
     tab1, tab2, tab3 = st.tabs(["🛠️ Segment Builder & Sizing", "📊 Universal Crosstabs", "🗺️ Landscape Map"])
     
     # -------------------------------------------------------------
-    # TAB 1: SEGMENT BUILDER & SIZING
+    # TAB 1: SEGMENT BUILDER & Sizing
     # -------------------------------------------------------------
     with tab1:
         st.subheader("Create a Custom Segment")
@@ -331,7 +458,7 @@ if uploaded_file:
                 target_col = col_logic1 if i % 2 == 0 else col_logic2
                 with target_col:
                     role_label = "(Threshold Pool)" if stmt in threshold_statements else "(Mandatory Rule)"
-                    is_scale = (("[Psychographics]" in stmt) and ("Core Value" not in stmt)) or ("[Kids Attitudes]" in stmt)
+                    is_scale = (("Psycho]" in stmt) and ("Core Value" not in stmt)) or ("Kids Attitudes]" in stmt)
                     if is_scale: statement_logic[stmt] = st.selectbox(f"Match requirement for: {stmt[:35]}... {role_label}", options=SCALE_OPTIONS[2:], index=0, key=f"logic_{stmt}")
                     else:
                         st.info(f"✔️ **{stmt[:45]}...** (Auto-Matched as YES/NO)")
@@ -348,8 +475,12 @@ if uploaded_file:
                     st.caption("No Threshold pool selected. Evaluating Mandatory statements only.")
                 
             matches_df = pd.DataFrame(index=st.session_state['df_working'].index)
+            seg_valid_base = pd.Series(False, index=st.session_state['df_working'].index)
+            
             for stmt, logic in statement_logic.items():
                 matches_df[stmt] = get_scale_mask(st.session_state['df_working'], stmt, logic).astype(bool)
+                # The eligible base for a custom segment is the union of all questions asked to build it
+                seg_valid_base = seg_valid_base | (st.session_state['df_valid'][stmt] == 1)
                     
             if threshold_statements: meets_threshold = matches_df[threshold_statements].sum(axis=1) >= threshold
             else: meets_threshold = pd.Series(True, index=matches_df.index)
@@ -358,12 +489,11 @@ if uploaded_file:
             else: meets_mandatory = pd.Series(True, index=matches_df.index)
                 
             temp_segment = (meets_threshold & meets_mandatory).astype(int)
-            
             raw_match = int(temp_segment.sum())
-            total_unw = len(st.session_state['df_working'])
+            total_weighted = st.session_state['df_working']['Weight'].sum()
+            weighted_match = st.session_state['df_working'][temp_segment == 1]['Weight'].sum()
             
-            pct_market = (raw_match / total_unw * 100) if total_unw > 0 else 0
-            st.success(f"📊 **Dynamic Preview:** This configuration currently captures **{raw_match:,}** respondents ({pct_market:.1f}% of total population).")
+            st.success(f"📊 **Dynamic Preview:** This configuration currently captures **{raw_match:,}** respondents ({(weighted_match/total_weighted)*100:.1f}% of total market).")
             
             with col_save:
                 segment_name = st.text_input("Name your Segment:", value="New Segment 1")
@@ -371,6 +501,7 @@ if uploaded_file:
                     if segment_name in st.session_state['created_segments'] or segment_name in all_cols: st.error("A segment with this name already exists.")
                     else:
                         st.session_state['df_working'][segment_name] = temp_segment
+                        st.session_state['df_valid'][segment_name] = seg_valid_base.astype(int)
                         st.session_state['created_segments'].append(segment_name)
                         st.rerun()
 
@@ -378,36 +509,22 @@ if uploaded_file:
         st.subheader("📏 Saved Segments Sizing")
         if st.session_state['created_segments']:
             sizing_data = []
-            total_unw = len(st.session_state['df_working'])
+            total_pop = st.session_state['df_working']['Weight'].sum()
             
             metric_cols = st.columns(min(len(st.session_state['created_segments']), 4))
             
             for i, seg in enumerate(st.session_state['created_segments']):
+                seg_wgt = st.session_state['df_working'][st.session_state['df_working'][seg] == 1]['Weight'].sum()
                 seg_unw = len(st.session_state['df_working'][st.session_state['df_working'][seg] == 1])
-                pop_share = (seg_unw / total_unw) if total_unw > 0 else 0
+                market_share = (seg_wgt / total_pop) if total_pop > 0 else 0
                 
                 with metric_cols[i % 4]:
-                    st.metric(label=f"🎯 {seg}", value=f"{seg_unw:,}", delta=f"{pop_share * 100:.1f}% of Population", delta_color="off")
+                    st.metric(label=f"🎯 {seg}", value=f"{int(seg_wgt):,}", delta=f"{market_share * 100:.1f}% Market Share", delta_color="off")
                     
-                sizing_data.append({
-                    "Segment Name": seg, 
-                    "Count": seg_unw, 
-                    "Population Share (%)": pop_share * 100 
-                })
+                sizing_data.append({"Segment Name": seg, "Unweighted Count": seg_unw, "Weighted Count": int(seg_wgt), "Market Share (%)": market_share})
             
             st.markdown("<br>", unsafe_allow_html=True)
-            st.dataframe(
-                pd.DataFrame(sizing_data),
-                column_config={
-                    "Population Share (%)": st.column_config.NumberColumn(
-                        format="%.1f%%"
-                    ),
-                    "Count": st.column_config.NumberColumn(
-                        format="%d"
-                    )
-                },
-                use_container_width=True
-            )
+            st.dataframe(pd.DataFrame(sizing_data).style.format({"Market Share (%)": "{:.1%}", "Unweighted Count": "{:,}", "Weighted Count": "{:,}"}), use_container_width=True)
         else:
             st.info("No segments have been created yet. Build and save a segment above to see its sizing here.")
 
@@ -429,13 +546,19 @@ if uploaded_file:
                     elif len(qc_vars) < 2: st.warning("Please select at least 2 variables to combine.")
                     else:
                         qc_mask = pd.Series(True, index=st.session_state['df_working'].index) if "AND" in qc_logic else pd.Series(False, index=st.session_state['df_working'].index)
+                        qc_valid_base = pd.Series(False, index=st.session_state['df_working'].index)
+                        
                         for v in qc_vars:
-                            is_scale = (("[Psychographics]" in v) and ("Core Value" not in v)) or ("[Kids Attitudes]" in v)
+                            is_scale = (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v)
                             v_mask = st.session_state['df_working'][v].isin([1, 2]) if is_scale else st.session_state['df_working'][v] == 1
                             if "AND" in qc_logic: qc_mask = qc_mask & v_mask
                             else: qc_mask = qc_mask | v_mask
+                            
+                            # The combined segment is valid if the respondent was eligible for any of its parts
+                            qc_valid_base = qc_valid_base | (st.session_state['df_valid'][v] == 1)
                                 
                         st.session_state['df_working'][qc_name] = qc_mask.astype(int)
+                        st.session_state['df_valid'][qc_name] = qc_valid_base.astype(int)
                         st.session_state['created_segments'].append(qc_name)
                         st.success(f"✅ {qc_name} added to Saved Segments!")
                         st.rerun()
@@ -449,11 +572,6 @@ if uploaded_file:
         with r_col3: row_brands = st.multiselect("Brands & Products", CAT_BRANDS, key="r_brand")
         with r_col4: row_psycho = st.multiselect("Attitudes", CAT_ATTITUDES, key="r_psycho")
         
-        row_custom = []
-        if st.session_state['created_segments']:
-            st.markdown("<br>", unsafe_allow_html=True)
-            row_custom = st.multiselect("🌟 Custom Segments & Combinations (Rows)", st.session_state['created_segments'], key="r_custom")
-        
         with st.expander("➕ View More Row Categories", expanded=False):
             ex_r1, ex_r2, ex_r3, ex_r4 = st.columns(4)
             with ex_r1: row_buy = st.multiselect("Buying Styles", CAT_BUYING, key="r_buy")
@@ -461,7 +579,13 @@ if uploaded_file:
             with ex_r3: row_chan = st.multiselect("Channels & Occasions", CAT_CHANNELS, key="r_chan")
             with ex_r4: row_reas = st.multiselect("Drivers & Perceptions", CAT_REASONS + CAT_PERCEPTIONS, key="r_reas")
             
-        raw_ct_rows = row_demos + row_cats + row_brands + row_psycho + row_buy + row_favs + row_chan + row_reas + row_custom
+        with st.expander("⚙️ View Unmapped / Raw Variables", expanded=False):
+            if CAT_RAW: row_raw = st.multiselect("Raw Variables (Rows)", CAT_RAW, key="r_raw")
+            else: 
+                st.info("Perfect Data Quality: 100% of survey variables were successfully mapped to standard categories.")
+                row_raw = []
+
+        raw_ct_rows = row_demos + row_cats + row_brands + row_psycho + row_buy + row_favs + row_chan + row_reas + st.session_state['created_segments'] + row_raw
         ct_rows = list(dict.fromkeys([x for x in raw_ct_rows if x]))
         
         st.markdown("---")
@@ -472,11 +596,6 @@ if uploaded_file:
         with c_col3: col_brands = st.multiselect("Brands & Products ", CAT_BRANDS, key="c_brand")
         with c_col4: col_psycho = st.multiselect("Attitudes ", CAT_ATTITUDES, key="c_psycho")
         
-        col_custom = []
-        if st.session_state['created_segments']:
-            st.markdown("<br>", unsafe_allow_html=True)
-            col_custom = st.multiselect("🌟 Custom Segments & Combinations (Columns)", st.session_state['created_segments'], key="c_custom")
-        
         with st.expander("➕ View More Column Categories", expanded=False):
             ex_c1, ex_c2, ex_c3, ex_c4 = st.columns(4)
             with ex_c1: col_buy = st.multiselect("Buying Styles ", CAT_BUYING, key="c_buy")
@@ -484,11 +603,15 @@ if uploaded_file:
             with ex_c3: col_chan = st.multiselect("Channels & Occasions ", CAT_CHANNELS, key="c_chan")
             with ex_c4: col_reas = st.multiselect("Drivers & Perceptions ", CAT_REASONS + CAT_PERCEPTIONS, key="c_reas")
 
-        raw_ct_cols = col_demos + col_cats + col_brands + col_psycho + col_buy + col_favs + col_chan + col_reas + col_custom
+        with st.expander("⚙️ View Unmapped / Raw Variables", expanded=False):
+            if CAT_RAW: col_raw = st.multiselect("Raw Variables (Cols)", CAT_RAW, key="c_raw")
+            else: col_raw = []
+
+        raw_ct_cols = col_demos + col_cats + col_brands + col_psycho + col_buy + col_favs + col_chan + col_reas + st.session_state['created_segments'] + col_raw
         ct_cols = list(dict.fromkeys([x for x in raw_ct_cols if x]))
         
         if ct_rows and ct_cols:
-            scale_vars_in_ct = [v for v in set(ct_rows + ct_cols) if (("[Psychographics]" in v) and ("Core Value" not in v)) or ("[Kids Attitudes]" in v)]
+            scale_vars_in_ct = [v for v in set(ct_rows + ct_cols) if (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v)]
             ct_logic_dict = {}
             if scale_vars_in_ct:
                 with st.expander("⚙️ Fine-Tune Attitude Scales for Rows & Columns (Defaults to Any Agree)", expanded=False):
@@ -498,17 +621,15 @@ if uploaded_file:
                         with t_col:
                             ct_logic_dict[v] = st.selectbox(f"{v[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"ct_logic_all_{v}")
 
-            # =====================================================================
-            # THE FIX: PURE UNWEIGHTED CROSSTAB CALCULATIONS 
-            # =====================================================================
-            total_unweighted = len(st.session_state['df_working'])
-            
+            # --- DYNAMIC ELIGIBLE BASE MATRIX CALCULATION ---
             export_data = []
-            universe_row = ["Study Universe", total_unweighted, 1.00, 1.00, 100]
+            
+            # The top row displays the total study universe and columns totals
+            universe_row = ["Total Survey Universe / Base"]
             
             col_baselines = {}
             for c in ct_cols:
-                is_scale = (("[Psychographics]" in c) and ("Core Value" not in c)) or ("[Kids Attitudes]" in c)
+                is_scale = (("Psycho]" in c) and ("Core Value" not in c)) or ("Kids Attitudes]" in c)
                 if is_scale:
                     logic = ct_logic_dict.get(c, "Any Agree (1 or 2 combined)")
                     col_mask = get_scale_mask(st.session_state['df_working'], c, logic)
@@ -518,16 +639,21 @@ if uploaded_file:
                     col_mask = st.session_state['df_working'][c] == 1
                     c_label = c
                     
+                # Validate the eligible universe for the column itself
+                c_valid_mask = st.session_state['df_valid'][c] == 1
                 col_unweighted = len(st.session_state['df_working'][col_mask])
-                col_baselines[c] = {"unw": col_unweighted, "mask": col_mask, "label": c_label}
+                col_weighted = st.session_state['df_working'][col_mask]['Weight'].sum()
+                c_valid_weighted = st.session_state['df_working'][c_valid_mask]['Weight'].sum()
                 
-                # Math fix: Use Unweighted exclusively
-                universe_row.extend([col_unweighted, 1.00, (col_unweighted / total_unweighted) if total_unweighted > 0 else 0, 100])
+                col_baselines[c] = {"mask": col_mask, "valid": c_valid_mask, "label": c_label}
+                universe_row.extend([col_unweighted, 1.00, (col_weighted / c_valid_weighted) if c_valid_weighted > 0 else 0, 100])
                 
-            export_data.append(universe_row)
+            # Place Total respondents metrics at the start
+            total_unweighted = len(st.session_state['df_working'])
+            export_data.append(universe_row[:1] + [total_unweighted, 1.00, 1.00, 100] + universe_row[1:])
             
             for r in ct_rows:
-                is_scale = (("[Psychographics]" in r) and ("Core Value" not in r)) or ("[Kids Attitudes]" in r)
+                is_scale = (("Psycho]" in r) and ("Core Value" not in r)) or ("Kids Attitudes]" in r)
                 if is_scale:
                     logic = ct_logic_dict.get(r, "Any Agree (1 or 2 combined)")
                     r_mask = get_scale_mask(st.session_state['df_working'], r, logic)
@@ -536,22 +662,31 @@ if uploaded_file:
                 else:
                     r_mask = st.session_state['df_working'][r] == 1
                     r_label = r
+                    
+                r_valid_mask = st.session_state['df_valid'][r] == 1
                 
-                # Math fix: Use Unweighted exclusively
                 stmt_unweighted = len(st.session_state['df_working'][r_mask])
-                stmt_vert_pct = (stmt_unweighted / total_unweighted) if total_unweighted > 0 else 0
+                stmt_weighted = st.session_state['df_working'][r_mask]['Weight'].sum()
+                r_valid_weighted = st.session_state['df_working'][r_valid_mask]['Weight'].sum()
+                
+                stmt_vert_pct = (stmt_weighted / r_valid_weighted) if r_valid_weighted > 0 else 0
                 
                 r_data = [r_label, stmt_unweighted, stmt_vert_pct, 1.00, 100]
                 
                 for c in ct_cols:
                     c_mask = col_baselines[c]["mask"]
+                    c_valid = col_baselines[c]["valid"]
                     
-                    # Math fix: Use Unweighted exclusively
-                    cross_unweighted = len(st.session_state['df_working'][r_mask & c_mask])
+                    cross_mask = r_mask & c_mask
+                    cross_unweighted = len(st.session_state['df_working'][cross_mask])
+                    cross_weighted = st.session_state['df_working'][cross_mask]['Weight'].sum()
                     
-                    col_unw_base = col_baselines[c]["unw"]
-                    vert_pct = (cross_unweighted / col_unw_base) if col_unw_base > 0 else 0
-                    horz_pct = (cross_unweighted / stmt_unweighted) if stmt_unweighted > 0 else 0
+                    # DYNAMIC CELL DENOMINATOR: How many people in the Column were actually asked the Row question?
+                    valid_for_cell_mask = c_mask & r_valid_mask
+                    cell_base_wgt = st.session_state['df_working'][valid_for_cell_mask]['Weight'].sum()
+                    
+                    vert_pct = (cross_weighted / cell_base_wgt) if cell_base_wgt > 0 else 0
+                    horz_pct = (cross_weighted / stmt_weighted) if stmt_weighted > 0 else 0
                     idx_score = (vert_pct / stmt_vert_pct * 100) if stmt_vert_pct > 0 else 0
                     
                     r_data.extend([cross_unweighted, vert_pct, horz_pct, int(round(idx_score, 0))])
@@ -576,7 +711,7 @@ if uploaded_file:
                 elif "Index" in col: format_dict[col] = "{:.0f}"
             st.dataframe(df_preview.head(10).style.format(format_dict))
             
-            excel_headers = ["Statement", "Study Universe", "", "", ""] 
+            excel_headers = ["Statement", "Total Survey Universe / Base", "", "", ""] 
             excel_sub_headers = ["", "Unweighted", "Vertical(%)", "Horizontal(%)", "Index"]
             for c in ct_cols:
                 c_display = col_baselines[c]["label"]
@@ -589,7 +724,13 @@ if uploaded_file:
             
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                pd.DataFrame([["CROSSTAB TITLE : Universal Crosstabs"], ["STUDY NAME : Advanced Market Mapper"], ["WEIGHT TYPE : Unweighted / Population"], ["SELECTED BASE : Study Universe"]]).to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
+                pd.DataFrame([
+                    ["CROSSTAB TITLE : Universal Crosstabs"], 
+                    ["STUDY NAME : Advanced Market Mapper"], 
+                    ["SELECTED BASE : Dynamic Question-Level Auto-Base (N sizes automatically adjust to exclude skipped respondents)"], 
+                    ["WEIGHT TYPE : Unweighted / Population"]
+                ]).to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
+                
                 df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
                 
                 worksheet = writer.sheets['Crosstab']
@@ -613,7 +754,7 @@ if uploaded_file:
         map_cols = st.multiselect("Select Columns (Brands/Segments) to map:", CAT_BRANDS + st.session_state['created_segments'], default=CAT_BRANDS[:3])
         
         if map_rows and map_cols:
-            scale_vars_map = [v for v in set(map_rows + map_cols) if (("[Psychographics]" in v) and ("Core Value" not in v)) or ("[Kids Attitudes]" in v)]
+            scale_vars_map = [v for v in set(map_rows + map_cols) if (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v)]
             map_logic_dict = {}
             if scale_vars_map:
                 with st.expander("⚙️ Fine-Tune Attitude Scales (Defaults to Any Agree)", expanded=False):
@@ -627,7 +768,7 @@ if uploaded_file:
             map_matrix = []
             for r in map_rows:
                 r_data = []
-                is_scale_r = (("[Psychographics]" in r) and ("Core Value" not in r)) or ("[Kids Attitudes]" in r)
+                is_scale_r = (("Psycho]" in r) and ("Core Value" not in r)) or ("Kids Attitudes]" in r)
                 if is_scale_r:
                     logic = map_logic_dict.get(r, "Any Agree (1 or 2 combined)")
                     r_mask = get_scale_mask(st.session_state['df_working'], r, logic)
@@ -635,15 +776,14 @@ if uploaded_file:
                     r_mask = st.session_state['df_working'][r] == 1
                     
                 for c in map_cols:
-                    is_scale_c = (("[Psychographics]" in c) and ("Core Value" not in c)) or ("[Kids Attitudes]" in c)
+                    is_scale_c = (("Psycho]" in c) and ("Core Value" not in c)) or ("Kids Attitudes]" in c)
                     if is_scale_c:
                         logic = map_logic_dict.get(c, "Any Agree (1 or 2 combined)")
                         c_mask = get_scale_mask(st.session_state['df_working'], c, logic)
                     else: 
                         c_mask = st.session_state['df_working'][c] == 1
                         
-                    # Math fix: Use Unweighted exclusively
-                    val = len(st.session_state['df_working'][r_mask & c_mask])
+                    val = st.session_state['df_working'][r_mask & c_mask]['Weight'].sum()
                     r_data.append(val)
                 map_matrix.append(r_data)
             
