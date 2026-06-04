@@ -95,30 +95,36 @@ def load_and_prep_data(file):
         exist_cols = [c for c in cols if c in df.columns]
         if not exist_cols: return pd.Series(False, index=df.index)
         
-        # FIX: Replaced .astype(str) to prevent turning true nulls into the string "nan".
         # This replaces any combination of blank spaces with true np.nan before checking.
         temp_df = df[exist_cols].replace(r'^\s*$', np.nan, regex=True)
         return temp_df.notna().any(axis=1)
 
-    base_100 = pd.Series(True, index=df.index)
-    
+    # -------------------------------------------------------------
+    # GLOBAL FIX: Replaced base_100 with dynamic get_block_valid_mask
+    # -------------------------------------------------------------
     for col, value_map in DEMO_MAP.items():
         if col in df.columns:
+            valid_mask = get_block_valid_mask([col])
             s_num = pd.to_numeric(df[col], errors='coerce')
-            for val, label in value_map.items(): add_var(f"[{col} Demo] {label}", (s_num == val).astype(int), base_100)
+            for val, label in value_map.items(): add_var(f"[{col} Demo] {label}", (s_num == val).astype(int), valid_mask)
                 
+    # Group ethnicity columns to create one block mask
+    eth_cols = [f"D6_{i}" for i in ETHNICITIES.keys() if f"D6_{i}" in df.columns]
+    eth_mask = get_block_valid_mask(eth_cols) if eth_cols else pd.Series(True, index=df.index)
     for e_idx, e_name in ETHNICITIES.items():
-        if f"D6_{e_idx}" in df.columns: add_var(f"[D6 Demo] Ethnicity: {e_name}", pd.to_numeric(df[f"D6_{e_idx}"], errors='coerce').fillna(0).astype(int), base_100)
+        if f"D6_{e_idx}" in df.columns: add_var(f"[D6 Demo] Ethnicity: {e_name}", pd.to_numeric(df[f"D6_{e_idx}"], errors='coerce').fillna(0).astype(int), eth_mask)
                 
     if 'D2' in df.columns:
+        d2_mask = get_block_valid_mask(['D2'])
         d2 = pd.to_numeric(df['D2'], errors='coerce').fillna(0)
-        add_var("[D2 Demo] HH Size: 1 Person", (d2 == 1).astype(int), base_100)
-        add_var("[D2 Demo] HH Size: 2 People", (d2 == 2).astype(int), base_100)
-        add_var("[D2 Demo] HH Size: 3-4 People", ((d2 >= 3) & (d2 <= 4)).astype(int), base_100)
-        add_var("[D2 Demo] HH Size: 5+ People", (d2 >= 5).astype(int), base_100)
+        add_var("[D2 Demo] HH Size: 1 Person", (d2 == 1).astype(int), d2_mask)
+        add_var("[D2 Demo] HH Size: 2 People", (d2 == 2).astype(int), d2_mask)
+        add_var("[D2 Demo] HH Size: 3-4 People", ((d2 >= 3) & (d2 <= 4)).astype(int), d2_mask)
+        add_var("[D2 Demo] HH Size: 5+ People", (d2 >= 5).astype(int), d2_mask)
 
     d4_cols = [c for c in df.columns if c.startswith('D4_')]
     if d4_cols:
+        d4_mask = get_block_valid_mask(d4_cols)
         has_u6 = pd.Series(False, index=df.index)
         has_6_12 = pd.Series(False, index=df.index)
         has_13_17 = pd.Series(False, index=df.index)
@@ -127,36 +133,48 @@ def load_and_prep_data(file):
             has_u6 = has_u6 | (age_s < 6)
             has_6_12 = has_6_12 | ((age_s >= 6) & (age_s <= 12))
             has_13_17 = has_13_17 | ((age_s >= 13) & (age_s <= 17))
-        add_var("[D4 Demo] Has Child <6", has_u6.astype(int), base_100)
-        add_var("[D4 Demo] Has Child 6-12", has_6_12.astype(int), base_100)
-        add_var("[D4 Demo] Has Child 13-17", has_13_17.astype(int), base_100)
+        add_var("[D4 Demo] Has Child <6", has_u6.astype(int), d4_mask)
+        add_var("[D4 Demo] Has Child 6-12", has_6_12.astype(int), d4_mask)
+        add_var("[D4 Demo] Has Child 13-17", has_13_17.astype(int), d4_mask)
 
     for q_code, label in CATEGORIES.items():
-        if q_code in df.columns: add_var(f"[Quota Category] Buyer: {label}", pd.to_numeric(df[q_code], errors='coerce').fillna(0).astype(int), base_100)
+        if q_code in df.columns: add_var(f"[Quota Category] Buyer: {label}", pd.to_numeric(df[q_code], errors='coerce').fillna(0).astype(int), get_block_valid_mask([q_code]))
+    
     for c_idx, c_name in P3M_CATS.items():
         col = f"S6_r{c_idx}_c1" 
-        if col in df.columns: add_var(f"[S6 Category] P3M Self: {c_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), base_100)
+        if col in df.columns: add_var(f"[S6 Category] P3M Self: {c_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), get_block_valid_mask([col]))
 
     for b_idx, b_name in BRANDS.items():
-        if f"Q1_{b_idx}" in df.columns: add_var(f"[Q1 Brand] Purchased: {b_name}", pd.to_numeric(df[f"Q1_{b_idx}"], errors='coerce').fillna(0).astype(int), base_100)
-        if f"Q4_{b_idx}" in df.columns: add_var(f"[Q4 Rejectors/Favs] HH Favorite: {b_name}", pd.to_numeric(df[f"Q4_{b_idx}"], errors='coerce').fillna(0).astype(int), base_100)
-        if f"Q5_{b_idx}" in df.columns: add_var(f"[Q5 Brand] Most Recent Purch: {b_name}", pd.to_numeric(df[f"Q5_{b_idx}"], errors='coerce').fillna(0).astype(int), base_100)
-        if f"Q7_{b_idx}" in df.columns: add_var(f"[Q7 Rejectors/Favs] Never Consider: {b_name}", pd.to_numeric(df[f"Q7_{b_idx}"], errors='coerce').fillna(0).astype(int), base_100)
+        if f"Q1_{b_idx}" in df.columns: add_var(f"[Q1 Brand] Purchased: {b_name}", pd.to_numeric(df[f"Q1_{b_idx}"], errors='coerce').fillna(0).astype(int), get_block_valid_mask([f"Q1_{b_idx}"]))
+        if f"Q4_{b_idx}" in df.columns: add_var(f"[Q4 Rejectors/Favs] HH Favorite: {b_name}", pd.to_numeric(df[f"Q4_{b_idx}"], errors='coerce').fillna(0).astype(int), get_block_valid_mask([f"Q4_{b_idx}"]))
+        if f"Q5_{b_idx}" in df.columns: add_var(f"[Q5 Brand] Most Recent Purch: {b_name}", pd.to_numeric(df[f"Q5_{b_idx}"], errors='coerce').fillna(0).astype(int), get_block_valid_mask([f"Q5_{b_idx}"]))
+        if f"Q7_{b_idx}" in df.columns: add_var(f"[Q7 Rejectors/Favs] Never Consider: {b_name}", pd.to_numeric(df[f"Q7_{b_idx}"], errors='coerce').fillna(0).astype(int), get_block_valid_mask([f"Q7_{b_idx}"]))
 
     for v_idx, v_name in MRI_VALUES.items():
-        if f"Q18_{v_idx}" in df.columns: add_var(f"[Q18 Psycho] Core Value: {v_name}", pd.to_numeric(df[f"Q18_{v_idx}"], errors='coerce').fillna(0).astype(int), base_100)
+        col = f"Q18_{v_idx}"
+        if col in df.columns: add_var(f"[Q18 Psycho] Core Value: {v_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), get_block_valid_mask([col]))
+        
     for r_idx, r_name in KIDS_ATTITUDES.items():
-        if f"Q13_r{r_idx}" in df.columns: add_var(f"[Q13 Kids Attitudes] {r_name}", pd.to_numeric(df[f"Q13_r{r_idx}"], errors='coerce').fillna(0), base_100)
+        col = f"Q13_r{r_idx}"
+        if col in df.columns: add_var(f"[Q13 Kids Attitudes] {r_name}", pd.to_numeric(df[col], errors='coerce').fillna(0), get_block_valid_mask([col]))
+        
     for idx, name in BEV_ATTITUDES_1.items():
-        if f"Q16_{idx}" in df.columns: add_var(f"[Q16 Bev Attitudes] {name}", pd.to_numeric(df[f"Q16_{idx}"], errors='coerce').fillna(0).astype(int), base_100)
+        col = f"Q16_{idx}"
+        if col in df.columns: add_var(f"[Q16 Bev Attitudes] {name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), get_block_valid_mask([col]))
+        
     for idx, name in BEV_ATTITUDES_2.items():
-        if f"Q16x2_{idx}" in df.columns: add_var(f"[Q16x2 Bev Attitudes] {name}", pd.to_numeric(df[f"Q16x2_{idx}"], errors='coerce').fillna(0).astype(int), base_100)
+        col = f"Q16x2_{idx}"
+        if col in df.columns: add_var(f"[Q16x2 Bev Attitudes] {name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), get_block_valid_mask([col]))
+        
     for r_idx, r_name in BRAND_ATTITUDES.items():
         for b_idx, b_name in BRANDS.items():
-            if f"Q17_r{r_idx}_c{b_idx}" in df.columns: add_var(f"[Q17 Brand Attitude] {r_name} - {b_name}", pd.to_numeric(df[f"Q17_r{r_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int), base_100)
+            col = f"Q17_r{r_idx}_c{b_idx}"
+            if col in df.columns: add_var(f"[Q17 Brand Attitude] {r_name} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), get_block_valid_mask([col]))
+            
     for q_code, english_stmt in PSYCHOGRAPHICS.items():
-        if q_code in df.columns: add_var(f"[{q_code.split('_')[0]} Psycho] {english_stmt}", pd.to_numeric(df[q_code], errors='coerce').fillna(0), base_100)
+        if q_code in df.columns: add_var(f"[{q_code.split('_')[0]} Psycho] {english_stmt}", pd.to_numeric(df[q_code], errors='coerce').fillna(0), get_block_valid_mask([q_code]))
 
+    # Existing dynamically masked logic continues
     q8_mask = get_block_valid_mask([c for c in df.columns if c.startswith('Q8_')])
     for col in [c for c in df.columns if c.startswith('Q8_')]:
         parts = col.replace('Q8_', '').split('.')
@@ -392,11 +410,29 @@ if uploaded_file:
                     st.caption("No Threshold pool selected. Evaluating Mandatory statements only.")
                 
             matches_df = pd.DataFrame(index=st.session_state['df_working'].index)
-            seg_valid_base = pd.Series(False, index=st.session_state['df_working'].index)
+            
+            # ---------------------------------------------------------
+            # FIXED: Base calculation handles intersections properly for Mandatory rules
+            # ---------------------------------------------------------
+            seg_valid_base_thresh = pd.Series(False, index=st.session_state['df_working'].index)
+            seg_valid_base_mand = pd.Series(True, index=st.session_state['df_working'].index)
             
             for stmt, logic in statement_logic.items():
                 matches_df[stmt] = get_scale_mask(st.session_state['df_working'], stmt, logic).astype(bool)
-                seg_valid_base = seg_valid_base | (st.session_state['df_valid'][stmt] == 1)
+                if stmt in threshold_statements:
+                    seg_valid_base_thresh = seg_valid_base_thresh | (st.session_state['df_valid'][stmt] == 1)
+                if stmt in mandatory_statements:
+                    seg_valid_base_mand = seg_valid_base_mand & (st.session_state['df_valid'][stmt] == 1)
+            
+            # Final valid base is the intersection of the two valid bases (if applicable)
+            if threshold_statements and mandatory_statements:
+                seg_valid_base = seg_valid_base_thresh & seg_valid_base_mand
+            elif threshold_statements:
+                seg_valid_base = seg_valid_base_thresh
+            elif mandatory_statements:
+                seg_valid_base = seg_valid_base_mand
+            else:
+                seg_valid_base = pd.Series(True, index=st.session_state['df_working'].index)
                     
             if threshold_statements: meets_threshold = matches_df[threshold_statements].sum(axis=1) >= threshold
             else: meets_threshold = pd.Series(True, index=matches_df.index)
@@ -461,15 +497,26 @@ if uploaded_file:
                     if qc_name in st.session_state['created_segments'] or qc_name in all_cols: st.error("Name already exists!")
                     elif len(qc_vars) < 2: st.warning("Please select at least 2 variables to combine.")
                     else:
+                        # ---------------------------------------------------------
+                        # FIXED: Base calculation handles intersections properly for Quick Combiner
+                        # ---------------------------------------------------------
                         qc_mask = pd.Series(True, index=st.session_state['df_working'].index) if "AND" in qc_logic else pd.Series(False, index=st.session_state['df_working'].index)
-                        qc_valid_base = pd.Series(False, index=st.session_state['df_working'].index)
+                        
+                        if "AND" in qc_logic:
+                            qc_valid_base = pd.Series(True, index=st.session_state['df_working'].index)
+                        else:
+                            qc_valid_base = pd.Series(False, index=st.session_state['df_working'].index)
                         
                         for v in qc_vars:
                             is_scale = (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v)
                             v_mask = st.session_state['df_working'][v].isin([1, 2]) if is_scale else st.session_state['df_working'][v] == 1
-                            if "AND" in qc_logic: qc_mask = qc_mask & v_mask
-                            else: qc_mask = qc_mask | v_mask
-                            qc_valid_base = qc_valid_base | (st.session_state['df_valid'][v] == 1)
+                            
+                            if "AND" in qc_logic: 
+                                qc_mask = qc_mask & v_mask
+                                qc_valid_base = qc_valid_base & (st.session_state['df_valid'][v] == 1)
+                            else: 
+                                qc_mask = qc_mask | v_mask
+                                qc_valid_base = qc_valid_base | (st.session_state['df_valid'][v] == 1)
                                 
                         st.session_state['df_working'][qc_name] = qc_mask.astype(int)
                         st.session_state['df_valid'][qc_name] = qc_valid_base.astype(int)
@@ -536,10 +583,8 @@ if uploaded_file:
                         with t_col:
                             ct_logic_dict[v] = st.selectbox(f"{v[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"ct_logic_all_{v}")
 
-            # --- THE FIX: REMOVED THE GLOBAL BASE COLUMN ---
             export_data = []
             
-            # The top row displays strictly the N sizes for each column Segment
             universe_row = ["Column Base (N)"]
             
             col_baselines = {}
@@ -584,7 +629,7 @@ if uploaded_file:
                 
                 stmt_vert_pct = (stmt_weighted / r_valid_weighted) if r_valid_weighted > 0 else 0
                 
-                r_data = [r_label] # FIX APPLIED HERE
+                r_data = [r_label]
                 
                 for c in ct_cols:
                     c_mask = col_baselines[c]["mask"]
