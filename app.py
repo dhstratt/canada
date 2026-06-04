@@ -92,12 +92,10 @@ def load_and_prep_data(file):
         df_valid[name] = valid_mask.astype(int)
         
     def get_block_valid_mask(cols):
-        # A respondent is eligible for a question if they provided a non-blank response to ANY option in that block
         exist_cols = [c for c in cols if c in df.columns]
         if not exist_cols: return pd.Series(False, index=df.index)
         return df[exist_cols].astype(str).replace(' ', np.nan).notna().any(axis=1)
 
-    # 1. 100% Global Base (Asked to everyone)
     base_100 = pd.Series(True, index=df.index)
     
     for col, value_map in DEMO_MAP.items():
@@ -155,7 +153,6 @@ def load_and_prep_data(file):
     for q_code, english_stmt in PSYCHOGRAPHICS.items():
         if q_code in df.columns: add_var(f"[{q_code.split('_')[0]} Psycho] {english_stmt}", pd.to_numeric(df[q_code], errors='coerce').fillna(0), base_100)
 
-    # 2. Quota / Skip Groups
     q8_mask = get_block_valid_mask([c for c in df.columns if c.startswith('Q8_')])
     for col in [c for c in df.columns if c.startswith('Q8_')]:
         parts = col.replace('Q8_', '').split('.')
@@ -211,7 +208,8 @@ def load_and_prep_data(file):
         s_num = pd.to_numeric(df['Q15'], errors='coerce')
         for r_idx, r_name in CONSUMPTION_CHANGE.items(): add_var(f"[Q15 Buying Styles] Consumption: {r_name}", (s_num == r_idx).astype(int), q15_mask)
             
-    for q_code, q_label in {'Q10': 'OJ', 'Q11': 'Lemonade', 'Q12': 'Other Juice'}.items():
+    q_map = {'Q10': 'OJ', 'Q11': 'Lemonade', 'Q12': 'Other Juice'}
+    for q_code, q_label in q_map.items():
         q_cols = [q_code] + [c for c in df.columns if c.startswith(f"{q_code}a_") or c.startswith(f"{q_code}b_")]
         q_mask = get_block_valid_mask(q_cols)
         if q_code in df.columns:
@@ -221,7 +219,6 @@ def load_and_prep_data(file):
             if f"{q_code}a_{p_idx}" in df.columns: add_var(f"[{q_code}a Buying Styles] Adult Driver ({q_label}): {p_name}", pd.to_numeric(df[f"{q_code}a_{p_idx}"], errors='coerce').fillna(0).astype(int), q_mask)
             if f"{q_code}b_{p_idx}" in df.columns: add_var(f"[{q_code}b Buying Styles] Kids Driver ({q_label}): {p_name}", pd.to_numeric(df[f"{q_code}b_{p_idx}"], errors='coerce').fillna(0).astype(int), q_mask)
 
-    # 3. Raw Auto-Catch
     known_prefixes = ('S2', 'S3', 'S4', 'S6', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11',
                       'Q1_', 'Q2_', 'Q3_', 'Q4_', 'Q5_', 'Q5a', 'Q6_', 'Q7_', 'Q8_', 'Q9_', 'Q9a_', 'Q9aa_', 'Q9b_', 
                       'Q10', 'Q11', 'Q12', 'Q13_', 'Q14_', 'Q15', 'Q16_', 'Q16x2', 'Q17_', 'Q18_', 'Q19_', 'Q20_', 
@@ -477,7 +474,6 @@ if uploaded_file:
                         st.rerun()
 
         st.markdown("---")
-        
         st.markdown("### ⬇️ 1. Select Columns (Banners)")
         col_search_all = st.multiselect("🔍 Universal Search (Type a keyword, brand, or Q-number):", all_vars_for_selection, key="c_search_all")
         
@@ -536,48 +532,48 @@ if uploaded_file:
                         with t_col:
                             ct_logic_dict[v] = st.selectbox(f"{v[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"ct_logic_all_{v}")
 
-            total_unweighted = len(st.session_state['df_working'])
-            total_weighted = st.session_state['df_working']['Weight'].sum()
-            
+            # --- THE FIX: REMOVED THE GLOBAL BASE COLUMN ---
             export_data = []
-            universe_row = ["Total Survey Universe / Valid Base"]
+            
+            # The top row displays strictly the N sizes for each column Segment
+            universe_row = ["Column Base (N)"]
             
             col_baselines = {}
-            
-            # 1. Compute Column sizes for the "Total Survey Universe" Row
             for c in ct_cols:
                 is_scale = (("Psycho]" in c) and ("Core Value" not in c)) or ("Kids Attitudes]" in c)
                 if is_scale:
                     logic = ct_logic_dict.get(c, "Any Agree (1 or 2 combined)")
                     col_mask = get_scale_mask(st.session_state['df_working'], c, logic)
-                    c_label = f"{c} ({logic.split(' (')[0]})"
+                    short_suffix = logic.split(" (")[0]
+                    c_label = f"{c} ({short_suffix})"
                 else:
                     col_mask = st.session_state['df_working'][c] == 1
                     c_label = c
                     
-                c_valid_mask = st.session_state['df_valid'][c] == 1
                 col_unweighted = len(st.session_state['df_working'][col_mask])
                 col_weighted = st.session_state['df_working'][col_mask]['Weight'].sum()
-                c_valid_weighted = st.session_state['df_working'][c_valid_mask]['Weight'].sum()
                 
-                col_baselines[c] = {"mask": col_mask, "valid": c_valid_mask, "label": c_label}
-                universe_row.extend([col_unweighted, (col_weighted / c_valid_weighted) if c_valid_weighted > 0 else 0, col_weighted / total_weighted, 100])
+                col_baselines[c] = {"mask": col_mask, "label": c_label}
+                universe_row.extend([col_unweighted, 1.00, 1.00, 100]) # Base row ratios are always 100%
                 
-            export_data.append(universe_row[:1] + [total_unweighted, 1.00, 1.00, 100] + universe_row[1:])
+            export_data.append(universe_row)
             
-            # 2. Compute Crosstab intersections
+            # Compute Crosstab intersections
             for r in ct_rows:
                 is_scale = (("Psycho]" in r) and ("Core Value" not in r)) or ("Kids Attitudes]" in r)
                 if is_scale:
                     logic = ct_logic_dict.get(r, "Any Agree (1 or 2 combined)")
                     r_mask = get_scale_mask(st.session_state['df_working'], r, logic)
-                    r_label = f"{r} ({logic.split(' (')[0]})"
+                    short_suffix = logic.split(" (")[0]
+                    r_label = f"{r} ({short_suffix})"
                 else:
                     r_mask = st.session_state['df_working'][r] == 1
                     r_label = r
                     
+                # Get the true N size of people who were eligible/asked this row question
                 r_valid_mask = st.session_state['df_valid'][r] == 1
                 
+                # Compute the total unweighted/weighted for the row statement natively
                 stmt_unweighted = len(st.session_state['df_working'][r_mask])
                 stmt_weighted = st.session_state['df_working'][r_mask]['Weight'].sum()
                 r_valid_weighted = st.session_state['df_working'][r_valid_mask]['Weight'].sum()
@@ -588,13 +584,11 @@ if uploaded_file:
                 
                 for c in ct_cols:
                     c_mask = col_baselines[c]["mask"]
-                    c_valid = col_baselines[c]["valid"]
-                    
                     cross_mask = r_mask & c_mask
                     cross_unweighted = len(st.session_state['df_working'][cross_mask])
                     cross_weighted = st.session_state['df_working'][cross_mask]['Weight'].sum()
                     
-                    # The dynamic cell base: "How many people in the Column were actually asked the Row question?"
+                    # DYNAMIC CELL DENOMINATOR: How many people in the Column were actually asked the Row question?
                     valid_for_cell_mask = c_mask & r_valid_mask
                     cell_base_wgt = st.session_state['df_working'][valid_for_cell_mask]['Weight'].sum()
                     
@@ -606,9 +600,9 @@ if uploaded_file:
                     
                 export_data.append(r_data)
             
+            # Build Table Previews
             preview_headers = ["Statement"]
             metrics = ["Unweighted", "Vertical(%)", "Horizontal(%)", "Index"]
-            for m in metrics: preview_headers.append(f"Total Survey Universe / Base - {m}")
             for c in ct_cols:
                 c_display = col_baselines[c]["label"]
                 for m in metrics: preview_headers.append(f"{c_display} - {m}")
@@ -624,8 +618,8 @@ if uploaded_file:
                 elif "Index" in col: format_dict[col] = "{:.0f}"
             st.dataframe(df_preview.head(10).style.format(format_dict))
             
-            excel_headers = ["Statement", "Total Survey Universe / Base", "", "", ""] 
-            excel_sub_headers = ["", "Unweighted", "Vertical(%)", "Horizontal(%)", "Index"]
+            excel_headers = ["Statement"] 
+            excel_sub_headers = [""]
             for c in ct_cols:
                 c_display = col_baselines[c]["label"]
                 excel_headers.extend([c_display, "", "", ""])
