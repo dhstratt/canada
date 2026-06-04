@@ -36,7 +36,6 @@ MRI_VALUES = {1: "Wealth", 2: "Adventure", 3: "Ambition", 4: "Thrift", 5: "Socia
 LOYALTY_APPROACH = {1: "Loyal to one brand", 2: "Choose between familiar brands", 3: "Always exploring new brands", 4: "Choose least expensive", 5: "None of the above"}
 CONSUMPTION_CHANGE = {1: "Drinking more than a year ago", 2: "Drinking less (changed this year)", 3: "Drinking less (gradual change)", 4: "Stayed about the same"}
 
-# Fully split and integrated parameters matching the survey blueprint
 RECENT_PURCHASE = {1: "Within last week", 2: "1-2 weeks ago", 3: "2-4 weeks ago", 4: "1-2 months ago", 5: "More than 2 months ago"}
 ADULT_PURCHASE_DRIVERS = {1: "Taste", 2: "Added nutritional benefits", 3: "Brand", 4: "Low sugar content", 5: "No sugar added", 6: "Total Price", 7: "Price per mL/ounce", 8: "Added functional benefits", 9: "Largest-size container", 10: "Smallest-size container", 11: "Medium-size container", 12: "Easy to pour", 13: "Low calorie content", 14: "Level of pulp / Flavor", 15: "Natural ingredients", 16: "No high sugar warning", 17: "Not from Concentrate", 18: "Other"}
 KIDS_PURCHASE_DRIVERS = {1: "Taste", 2: "Added nutritional benefits", 3: "Brand", 4: "Low sugar content", 5: "No sugar added", 6: "Total Price", 7: "Price per mL/ounce", 8: "Added functional benefits", 9: "Largest-size container", 10: "Smallest-size container", 11: "Medium-size container", 12: "Easy to pour", 13: "Low calorie content", 14: "Flavor", 15: "Has fun packaging", 16: "Does not have characters", 17: "No high sugar warning", 18: "Not from Concentrate", 19: "Natural ingredients", 20: "Other"}
@@ -63,7 +62,6 @@ DEMO_MAP = {
     "D11": {1: "Employ: Full Time", 2: "Employ: Part Time", 3: "Employ: Seeking", 4: "Employ: Student", 5: "Employ: Homemaker", 6: "Employ: Not Seeking", 7: "Employ: Retired"}
 }
 
-# Auto-expanding loop algorithm mapping all 135 dynamic Q8 options cleanly
 VARIETIES = {
     1: "Orange Juice", 2: "Lemonade/Limeades", 3: "Juice (NOT orange/lemonade)", 4: "Simply 50 Orange Juice",
     5: "Orange Juice", 6: "Lemonade/Limeades", 7: "Juice (NOT orange/lemonade)", 8: "Zero Sugar (fruit blends)", 9: "Zero Sugar (lemonades)",
@@ -117,7 +115,6 @@ def load_and_prep_data(file):
         temp_df = df[exist_cols].replace(r'^\s*$', np.nan, regex=True)
         return temp_df.notna().any(axis=1)
 
-    # Dynamic individual row variable structural mask processors
     for col, value_map in DEMO_MAP.items():
         if col in df.columns:
             valid_mask = get_block_valid_mask([col])
@@ -293,6 +290,20 @@ def load_and_prep_data(file):
                 if str(val).strip() != '': add_var(f"[{c} Raw] Answer: {val}", (df[c] == val).astype(int), valid_mask)
 
     return df_clean, df_valid
+
+# -------------------------------------------------------------
+# FIXED: Moved get_scale_mask out to the global level scope
+# -------------------------------------------------------------
+def get_scale_mask(dataframe, column_name, logic_string):
+    if logic_string == "Exact Match / YES (Binary)": return dataframe[column_name] == 1
+    elif logic_string == "Does Not Match / NO (Binary)": return dataframe[column_name] == 0
+    elif logic_string == "Any Agree (1 or 2 combined)": return dataframe[column_name].isin([1, 2])
+    elif logic_string == "Agree Completely (1 only)": return dataframe[column_name] == 1
+    elif logic_string == "Agree Somewhat (2 only)": return dataframe[column_name] == 2
+    elif logic_string == "Disagree Somewhat (3 only)": return dataframe[column_name] == 3
+    elif logic_string == "Disagree Completely (4 only)": return dataframe[column_name] == 4
+    elif logic_string == "Any Disagree (3 or 4 combined)": return dataframe[column_name].isin([3, 4])
+    return dataframe[column_name] == 1 
 
 # =====================================================================
 # SIDEBAR: UPLOAD & WORKSPACE MANAGEMENT
