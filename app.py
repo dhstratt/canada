@@ -88,6 +88,33 @@ SCALE_OPTIONS = [
 ]
 
 # =====================================================================
+# SCALE MASK EVALUATION ENGINE
+# =====================================================================
+def get_scale_mask(df, var, logic):
+    """Dynamically generates a boolean index mask for processing 1-4 scale survey items."""
+    if var not in df.columns:
+        return pd.Series(False, index=df.index)
+    
+    series = df[var]
+    if "Any Agree" in logic:
+        return series.isin([1, 2])
+    elif "Agree Completely" in logic:
+        return series == 1
+    elif "Agree Somewhat" in logic:
+        return series == 2
+    elif "Disagree Somewhat" in logic:
+        return series == 3
+    elif "Disagree Completely" in logic:
+        return series == 4
+    elif "Any Disagree" in logic:
+        return series.isin([3, 4])
+    elif "Exact Match / YES" in logic:
+        return series == 1
+    elif "Does Not Match / NO" in logic:
+        return series == 0
+    return pd.Series(False, index=df.index)
+
+# =====================================================================
 # DATA PROCESSING FUNCTIONS (DYNAMIC TRANSLATION ENGINE)
 # =====================================================================
 @st.cache_data
@@ -95,12 +122,16 @@ def load_and_prep_data(file):
     if file.name.endswith('.csv'): df = pd.read_csv(file)
     else: df = pd.read_excel(file)
         
-    df_clean = pd.DataFrame()
-    df_valid = pd.DataFrame()
+    # FIX: Initialize clean structures with standard dataframe tracking index
+    df_clean = pd.DataFrame(index=df.index)
+    df_valid = pd.DataFrame(index=df.index)
     
-    if 'Weight' in df.columns: 
-        df_clean['Weight'] = df['Weight']
-        df_valid['Weight'] = df['Weight']
+    # Defensive check for case-insensitive weight column setup
+    weight_col = next((c for c in df.columns if c.lower() == 'weight'), None)
+    
+    if weight_col: 
+        df_clean['Weight'] = pd.to_numeric(df[weight_col], errors='coerce').fillna(1.0)
+        df_valid['Weight'] = df_clean['Weight']
     else: 
         df_clean['Weight'] = 1.0
         df_valid['Weight'] = 1.0
@@ -290,20 +321,6 @@ def load_and_prep_data(file):
                 if str(val).strip() != '': add_var(f"[{c} Raw] Answer: {val}", (df[c] == val).astype(int), valid_mask)
 
     return df_clean, df_valid
-
-# -------------------------------------------------------------
-# FIXED: Moved get_scale_mask out to the global level scope
-# -------------------------------------------------------------
-def get_scale_mask(dataframe, column_name, logic_string):
-    if logic_string == "Exact Match / YES (Binary)": return dataframe[column_name] == 1
-    elif logic_string == "Does Not Match / NO (Binary)": return dataframe[column_name] == 0
-    elif logic_string == "Any Agree (1 or 2 combined)": return dataframe[column_name].isin([1, 2])
-    elif logic_string == "Agree Completely (1 only)": return dataframe[column_name] == 1
-    elif logic_string == "Agree Somewhat (2 only)": return dataframe[column_name] == 2
-    elif logic_string == "Disagree Somewhat (3 only)": return dataframe[column_name] == 3
-    elif logic_string == "Disagree Completely (4 only)": return dataframe[column_name] == 4
-    elif logic_string == "Any Disagree (3 or 4 combined)": return dataframe[column_name].isin([3, 4])
-    return dataframe[column_name] == 1 
 
 # =====================================================================
 # SIDEBAR: UPLOAD & WORKSPACE MANAGEMENT
