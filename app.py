@@ -23,6 +23,7 @@ CHANNELS = {1: "Grocery store", 2: "Ethnic Grocery", 3: "Mass retailer", 4: "Clu
 SIZES = {1: "Large carton", 2: "Single carton", 3: "Large plastic jug", 4: "Can", 5: "Single plastic bottle", 6: "Fountain cup", 7: "Other"}
 WHY_CHOOSE = {1: "Price/Value", 2: "Coupon/Incentive", 3: "Brand Loyalty", 4: "Trial/New", 5: "HH Request", 6: "Availability", 7: "Health Benefit", 8: "Convenience", 9: "Other"}
 WHO_DRINKS = {1: "Child <6", 2: "Child 6-12", 3: "Child 13-17", 4: "Other adult", 5: "Myself"}
+OTHER_ADULT_AGES = {1: "18-24", 2: "25-34", 3: "35-49", 4: "50-64", 5: "65+"}
 WHEN_HOW = {1: "With breakfast", 2: "Morning snack", 3: "Morning alone", 4: "With lunch", 5: "Afternoon snack", 6: "Afternoon alone", 7: "With dinner", 8: "Evening snack", 9: "Evening alone", 10: "Special occasion/treat", 11: "During/after exercise", 12: "Parties/social"}
 FREQUENCY = {1: "Multiple times/day", 2: "Once a day", 3: "3-5 times/week", 4: "1-2 times/week", 5: "2-3 times/month", 6: "Rarely/infrequently"}
 REASONS = {1: "Hydration & Refreshment", 2: "Energy & Focus", 3: "Health & Wellness", 4: "Indulgence & Craving", 5: "Routine & Habit", 6: "Social & Relaxation", 7: "Family Needs"}
@@ -41,6 +42,8 @@ PSYCHOGRAPHICS = {
     "Q19_r1": "I thrive at big parties and social occasions", "Q19_r2": "I think of myself as an intellectual", "Q19_r3": "Spending time with my family is my top priority", "Q19_r4": "I am interested in finding out how I can help the environment", "Q19_r5": "I am an optimist", "Q19_r6": "I seek out variety in my everyday life", "Q19_r7": "I make sure I take time for myself each day", "Q19_r8": "I like to learn about foreign cultures", "Q19_r9": "I’m perfectly happy with my standard of living", "Q20_r1": "I like to change brands often for the sake of variety and novelty", "Q20_r2": "I buy based on quality, not price", "Q20_r3": "Price is more important to me than brand names", "Q20_r4": "Generic or store brand products are as effective as brand-name products", "Q20_r5": "I enjoy wandering the store looking for new, interesting products", "Q20_r6": "I tend to make impulse purchases", "Q20_r7": "My children have significant impact on the brands I choose", "Q20_r8": "I buy brands that reflect my style", "Q20_r9": "I am influenced by what's hot and what's not", "Q21_r1": "I prefer foods cooked with bold flavors", "Q21_r2": "Nutritional value is the most important factor when I'm choosing which foods to eat", "Q21_r3": "I eat the foods I like regardless of calories", "Q21_r4": "I believe in a healthy lifestyle instead of traditional dieting", "Q21_r5": "Food is a comfort to me", "Q21_r6": "I indulge my cravings for foods I enjoy", "Q21_r7": "I am loyal to my food brands and stick with them", "Q21_r8": "Fast food is junk food", "Q21_r9": "I prefer to eat foods without artificial ingredients", "Q21_r10": "I try to eat a healthy breakfast every day", "Q22_r1": "I am generally more fit and active than other people my age", "Q22_r2": "I frequently look for new ways to change up my exercise routine", "Q22_r3": "I regularly look for ways to get a better night’s sleep", "Q22_r4": "Because of my busy lifestyle, I don’t take care of myself as well as I should", "Q22_r5": "The health claims/benefits on a product package often influence my decision to buy it", "Q22_r6": "Taking care of your mental health is a critical part of your overall wellness", "Q22_r7": "I always do what my doctor tells me to do", "Q22_r8": "I consider my diet to be very healthy"
 }
 
+ETHNICITIES = {1: "Asian", 2: "Arab", 3: "Black", 4: "Caucasian/White", 5: "Latin American", 6: "Jewish", 7: "Indigenous Peoples", 8: "Other", 9: "Do not wish to reply"}
+
 DEMO_MAP = {
     "S2": {2: "Province: BC", 3: "Province: Manitoba", 4: "Province: New Brunswick", 9: "Province: Ontario", 11: "Province: Quebec"},
     "S3": {2: "Age: 18-24", 3: "Age: 25-34", 4: "Age: 35-44", 5: "Age: 45-54", 6: "Age: 55-65"},
@@ -48,8 +51,9 @@ DEMO_MAP = {
     "D1": {1: "Gender: Female", 2: "Gender: Male", 3: "Gender: Non-Binary"},
     "D3": {1: "Marital: Single", 2: "Marital: Married", 3: "Marital: Living with Partner", 4: "Marital: Divorced", 5: "Marital: Separated", 6: "Marital: Widowed"},
     "D5": {1: "Income: <$25k", 2: "Income: $25k-$50k", 3: "Income: $50k-$75k", 4: "Income: $75k-$100k", 5: "Income: $100k-$150k", 6: "Income: $150k-$200k", 7: "Income: $200k+"},
-    "D6": {1: "Ethnicity: Asian", 2: "Ethnicity: Arab", 3: "Ethnicity: Black", 4: "Ethnicity: Caucasian/White", 5: "Ethnicity: Latin American", 6: "Ethnicity: Jewish", 7: "Ethnicity: Indigenous", 8: "Ethnicity: Other"},
+    "D7": {1: "Asian Background: Chinese", 2: "Asian Background: Filipino", 3: "Asian Background: Japanese", 4: "Asian Background: Korean", 5: "Asian Background: South Asian", 6: "Asian Background: Southeast Asian", 7: "Asian Background: Other"},
     "D8": {1: "Immigration: 1st Gen", 2: "Immigration: 1.5 Gen", 3: "Immigration: 2nd Gen", 4: "Immigration: 3rd Gen"},
+    "D9": {1: "Immigration Length: 0-5 years", 2: "Immigration Length: 6-10 years", 3: "Immigration Length: 11-20 years", 4: "Immigration Length: 21+ years"},
     "D10": {1: "Edu: Bachelor's", 2: "Edu: High School", 3: "Edu: College Diploma", 4: "Edu: Master's", 8: "Edu: Doctorate"},
     "D11": {1: "Employ: Full Time", 2: "Employ: Part Time", 4: "Employ: Student", 5: "Employ: Homemaker", 7: "Employ: Retired"}
 }
@@ -83,6 +87,33 @@ def load_and_prep_data(file):
             df[col] = pd.to_numeric(df[col], errors='coerce')
             for val, label in value_map.items():
                 df_clean[f"[Demo] {label}"] = (df[col] == val).astype(int)
+                
+    # 1B. Ethnicities (D6 is a Multi-Select)
+    for e_idx, e_name in ETHNICITIES.items():
+        if f"D6_{e_idx}" in df.columns:
+            df_clean[f"[Demo] Ethnicity: {e_name}"] = pd.to_numeric(df[f"D6_{e_idx}"], errors='coerce').fillna(0).astype(int)
+                
+    # 1C. Household Size (D2) and Children Ages (D4)
+    if 'D2' in df.columns:
+        df['D2'] = pd.to_numeric(df['D2'], errors='coerce').fillna(0)
+        df_clean["[Demo] HH Size: 1 Person"] = (df['D2'] == 1).astype(int)
+        df_clean["[Demo] HH Size: 2 People"] = (df['D2'] == 2).astype(int)
+        df_clean["[Demo] HH Size: 3-4 People"] = ((df['D2'] >= 3) & (df['D2'] <= 4)).astype(int)
+        df_clean["[Demo] HH Size: 5+ People"] = (df['D2'] >= 5).astype(int)
+
+    d4_cols = [c for c in df.columns if c.startswith('D4_')]
+    if d4_cols:
+        has_u6 = pd.Series(False, index=df.index)
+        has_6_12 = pd.Series(False, index=df.index)
+        has_13_17 = pd.Series(False, index=df.index)
+        for c in d4_cols:
+            age_s = pd.to_numeric(df[c], errors='coerce')
+            has_u6 = has_u6 | (age_s < 6)
+            has_6_12 = has_6_12 | ((age_s >= 6) & (age_s <= 12))
+            has_13_17 = has_13_17 | ((age_s >= 13) & (age_s <= 17))
+        df_clean["[Demo] Has Child <6"] = has_u6.astype(int)
+        df_clean["[Demo] Has Child 6-12"] = has_6_12.astype(int)
+        df_clean["[Demo] Has Child 13-17"] = has_13_17.astype(int)
 
     # 2. Categories (Quotas & P3M)
     for q_code, label in CATEGORIES.items():
@@ -126,6 +157,12 @@ def load_and_prep_data(file):
     for w_idx, w_name in WHO_DRINKS.items():
         for b_idx, b_name in BRANDS.items():
             if f"Q9_r{w_idx}_c{b_idx}" in df.columns: df_clean[f"[Who Drinks] {w_name} - {b_name}"] = pd.to_numeric(df[f"Q9_r{w_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
+    
+    # 8B. Other Adult Ages (Q9aa)
+    for a_idx, a_name in OTHER_ADULT_AGES.items():
+        for b_idx, b_name in BRANDS.items():
+            if f"Q9aa_{a_idx}.{b_idx}" in df.columns: df_clean[f"[Who Drinks] Other Adult ({a_name}) - {b_name}"] = pd.to_numeric(df[f"Q9aa_{a_idx}.{b_idx}"], errors='coerce').fillna(0).astype(int)
+
     for w_idx, w_name in WHEN_HOW.items():
         for b_idx, b_name in BRANDS.items():
             if f"Q9a_r{w_idx}_c{b_idx}" in df.columns: df_clean[f"[When/How] {w_name} - {b_name}"] = pd.to_numeric(df[f"Q9a_r{w_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
@@ -170,7 +207,7 @@ def load_and_prep_data(file):
             if f"Q17_r{r_idx}_c{b_idx}" in df.columns: df_clean[f"[Brand Attitude] {r_name} - {b_name}"] = pd.to_numeric(df[f"Q17_r{r_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
     for q_code, english_stmt in PSYCHOGRAPHICS.items():
         if q_code in df.columns: df_clean[f"[Psychographics] {english_stmt}"] = pd.to_numeric(df[q_code], errors='coerce').fillna(0)
-            
+
     return df_clean
 
 def get_scale_mask(dataframe, column_name, logic_string):
@@ -204,7 +241,7 @@ if uploaded_file:
             df_base = load_and_prep_data(uploaded_file)
             is_legacy_state = False
             if 'df_working' in st.session_state:
-                if not any(c.startswith('[Buying Styles]') for c in st.session_state['df_working'].columns):
+                if not any('Ethnicity: Caucasian' in c for c in st.session_state['df_working'].columns):
                     is_legacy_state = True
             
             if 'data_loaded' not in st.session_state or st.session_state.get('file_name') != uploaded_file.name or is_legacy_state:
@@ -268,8 +305,7 @@ if uploaded_file:
     with tab1:
         st.subheader("Create a Custom Segment")
         
-        # --- GLOBAL SEARCH FOR TAB 1 ---
-        search_query_t1 = st.text_input("🔍 Search to quickly find a variable for your segment (e.g., 'Orange Juice', 'Simply'):", key="t1_search")
+        search_query_t1 = st.text_input("🔍 Search to quickly find a variable for your segment (e.g., 'White', 'Simply'):", key="t1_search")
         if search_query_t1:
             matched_vars_t1 = [c for c in all_cols if search_query_t1.lower() in c.lower()]
             if matched_vars_t1: st.info(f"Matches found: {', '.join(matched_vars_t1[:5])}...")
@@ -277,12 +313,18 @@ if uploaded_file:
         
         col_pool, col_mand = st.columns(2)
         with col_pool:
-            st.markdown("**A. Threshold Statement Pool**")
-            threshold_statements = st.multiselect("Select variables for the 'Count' requirement:", options=all_cols)
+            st.markdown("### A. Threshold Statement Pool")
+            st.markdown("Select the core attitudes and behaviors that make up this mindset. Respondents must meet a minimum count of these.")
+            pool_psycho = st.multiselect("🧠 Select Attitudes & Psychographics:", options=CAT_ATTITUDES)
+            pool_other = st.multiselect("🛒 Select Brands, Demos, or Behaviors:", options=[c for c in all_cols if c not in CAT_ATTITUDES])
+            threshold_statements = pool_psycho + pool_other
             
         with col_mand:
-            st.markdown("**B. Mandatory 'AND' Statements**")
-            mandatory_statements = st.multiselect("Select variables that MUST be met (Optional):", options=[s for s in all_cols if s not in threshold_statements])
+            st.markdown("### B. Mandatory 'AND' Rules")
+            st.markdown("Select strict rules that the respondent MUST meet (e.g., Must be Female, Must drink Minute Maid).")
+            mand_psycho = st.multiselect("🧠 Mandatory Attitudes:", options=[c for c in CAT_ATTITUDES if c not in threshold_statements])
+            mand_other = st.multiselect("🛒 Mandatory Brands/Demos/Behaviors:", options=[c for c in all_cols if c not in CAT_ATTITUDES and c not in threshold_statements])
+            mandatory_statements = mand_psycho + mand_other
         
         all_selected = list(set(threshold_statements + mandatory_statements))
         
@@ -297,7 +339,6 @@ if uploaded_file:
                 target_col = col_logic1 if i % 2 == 0 else col_logic2
                 with target_col:
                     role_label = "(Threshold Pool)" if stmt in threshold_statements else "(Mandatory Rule)"
-                    # Use stricter check: only use scale if the column name doesn't contain "Core Value"
                     is_scale = (("[Psychographics]" in stmt) and ("Core Value" not in stmt)) or ("[Kids Attitudes]" in stmt)
                     if is_scale: statement_logic[stmt] = st.selectbox(f"Match requirement for: {stmt[:35]}... {role_label}", options=SCALE_OPTIONS[2:], index=0, key=f"logic_{stmt}")
                     else:
