@@ -580,7 +580,7 @@ if uploaded_file:
                 
                 stmt_vert_pct = (stmt_weighted / r_valid_weighted) if r_valid_weighted > 0 else 0
                 
-                r_data = [r_label, stmt_unweighted, stmt_vert_pct, 1.00, 100]
+                r_data = [r_label] # FIX APPLIED HERE
                 
                 for c in ct_cols:
                     c_mask = col_baselines[c]["mask"]
