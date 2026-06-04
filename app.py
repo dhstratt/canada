@@ -375,16 +375,30 @@ if uploaded_file:
                         st.session_state['created_segments'].append(segment_name)
                         st.rerun()
 
+        # --- THE FIX: NEW SAVED SEGMENTS DISPLAY ---
         st.markdown("---")
         st.subheader("📏 Saved Segments Sizing")
         if st.session_state['created_segments']:
             sizing_data = []
             total_pop = st.session_state['df_working']['Weight'].sum()
-            for seg in st.session_state['created_segments']:
+            
+            # 1. Visual Metric Cards
+            metric_cols = st.columns(min(len(st.session_state['created_segments']), 4))
+            
+            for i, seg in enumerate(st.session_state['created_segments']):
                 seg_wgt = st.session_state['df_working'][st.session_state['df_working'][seg] == 1]['Weight'].sum()
                 seg_unw = len(st.session_state['df_working'][st.session_state['df_working'][seg] == 1])
-                sizing_data.append({"Segment Name": seg, "Unweighted Count": seg_unw, "Weighted Count": int(seg_wgt), "% of Total Market": (seg_wgt / total_pop) if total_pop > 0 else 0})
-            st.dataframe(pd.DataFrame(sizing_data).style.format({"% of Total Market": "{:.1%}", "Unweighted Count": "{:,}", "Weighted Count": "{:,}"}), use_container_width=True)
+                market_share = (seg_wgt / total_pop) if total_pop > 0 else 0
+                
+                # Render the large visual metric
+                with metric_cols[i % 4]:
+                    st.metric(label=f"🎯 {seg}", value=f"{int(seg_wgt):,}", delta=f"{market_share * 100:.1f}% Market Share", delta_color="off")
+                    
+                sizing_data.append({"Segment Name": seg, "Unweighted Count": seg_unw, "Weighted Count": int(seg_wgt), "Market Share (%)": market_share})
+            
+            # 2. Data Table with Safe Header Name
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.dataframe(pd.DataFrame(sizing_data).style.format({"Market Share (%)": "{:.1%}", "Unweighted Count": "{:,}", "Weighted Count": "{:,}"}), use_container_width=True)
         else:
             st.info("No segments have been created yet. Build and save a segment above to see its sizing here.")
 
@@ -393,7 +407,7 @@ if uploaded_file:
     # -------------------------------------------------------------
     with tab2:
         st.subheader("Build a Custom Crosstab")
-        
+
         with st.expander("⚡ Quick Combiner (AND / OR Logic)", expanded=False):
             st.markdown("Instantly combine variables to use in your crosstabs without leaving this tab. *(Note: Any 1-4 scale Attitudes selected here will automatically be evaluated as 'Any Agree').*")
             qc_cols = st.columns([3, 1, 2])
