@@ -14,7 +14,7 @@ st.title("🎯 Universal Market Segment & Landscape Builder")
 st.markdown("Upload your raw survey data. **Use the dropdown boxes to search by Question Number (e.g., type 'Q19' or 'D5')** to instantly find what you need.")
 
 # =====================================================================
-# THE MEGA-CODEBOOK DICTIONARIES
+# THE MEGA-CODEBOOK DICTIONARIES (COMPLETE)
 # =====================================================================
 CATEGORIES = {"OJxBuyersQuota": "Orange Juice", "ADExBuyersQuota": "Lemonade & Ades", "OtherJuicexBuyersQuota": "Other Fruit Juices/Blends", "LightxBuyersQuota": "Zero/Light/Lower Sugar"}
 P3M_CATS = {1: "Soda/Pop/Cola", 2: "Tea", 3: "Coffee", 4: "Kombucha", 5: "Juice/Lemonade", 6: "Milk", 7: "Flavored water/seltzer", 8: "Sports drinks", 9: "Energy drinks", 10: "Nectars"}
@@ -90,201 +90,138 @@ def load_and_prep_data(file):
     def add_var(name, val_series, valid_mask):
         df_clean[name] = val_series
         df_valid[name] = valid_mask.astype(int)
+        
+    def get_block_valid_mask(cols):
+        # A respondent is eligible for a question if they provided a non-blank response to ANY option in that block
+        exist_cols = [c for c in cols if c in df.columns]
+        if not exist_cols: return pd.Series(False, index=df.index)
+        return df[exist_cols].astype(str).replace(' ', np.nan).notna().any(axis=1)
 
+    # 1. 100% Global Base (Asked to everyone)
+    base_100 = pd.Series(True, index=df.index)
+    
     for col, value_map in DEMO_MAP.items():
         if col in df.columns:
-            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-            for val, label in value_map.items():
-                add_var(f"[{col} Demo] {label}", (df[col] == val).astype(int), valid_mask)
+            s_num = pd.to_numeric(df[col], errors='coerce')
+            for val, label in value_map.items(): add_var(f"[{col} Demo] {label}", (s_num == val).astype(int), base_100)
                 
     for e_idx, e_name in ETHNICITIES.items():
-        if f"D6_{e_idx}" in df.columns:
-            valid_mask = pd.to_numeric(df[f"D6_{e_idx}"], errors='coerce').notna()
-            add_var(f"[D6 Demo] Ethnicity: {e_name}", pd.to_numeric(df[f"D6_{e_idx}"], errors='coerce').fillna(0).astype(int), valid_mask)
+        if f"D6_{e_idx}" in df.columns: add_var(f"[D6 Demo] Ethnicity: {e_name}", pd.to_numeric(df[f"D6_{e_idx}"], errors='coerce').fillna(0).astype(int), base_100)
                 
     if 'D2' in df.columns:
-        valid_mask = pd.to_numeric(df['D2'], errors='coerce').notna()
         d2 = pd.to_numeric(df['D2'], errors='coerce').fillna(0)
-        add_var("[D2 Demo] HH Size: 1 Person", (d2 == 1).astype(int), valid_mask)
-        add_var("[D2 Demo] HH Size: 2 People", (d2 == 2).astype(int), valid_mask)
-        add_var("[D2 Demo] HH Size: 3-4 People", ((d2 >= 3) & (d2 <= 4)).astype(int), valid_mask)
-        add_var("[D2 Demo] HH Size: 5+ People", (d2 >= 5).astype(int), valid_mask)
+        add_var("[D2 Demo] HH Size: 1 Person", (d2 == 1).astype(int), base_100)
+        add_var("[D2 Demo] HH Size: 2 People", (d2 == 2).astype(int), base_100)
+        add_var("[D2 Demo] HH Size: 3-4 People", ((d2 >= 3) & (d2 <= 4)).astype(int), base_100)
+        add_var("[D2 Demo] HH Size: 5+ People", (d2 >= 5).astype(int), base_100)
 
     d4_cols = [c for c in df.columns if c.startswith('D4_')]
     if d4_cols:
         has_u6 = pd.Series(False, index=df.index)
         has_6_12 = pd.Series(False, index=df.index)
         has_13_17 = pd.Series(False, index=df.index)
-        valid_mask = pd.Series(False, index=df.index)
         for c in d4_cols:
             age_s = pd.to_numeric(df[c], errors='coerce')
-            valid_mask = valid_mask | age_s.notna()
             has_u6 = has_u6 | (age_s < 6)
             has_6_12 = has_6_12 | ((age_s >= 6) & (age_s <= 12))
             has_13_17 = has_13_17 | ((age_s >= 13) & (age_s <= 17))
-        add_var("[D4 Demo] Has Child <6", has_u6.astype(int), valid_mask)
-        add_var("[D4 Demo] Has Child 6-12", has_6_12.astype(int), valid_mask)
-        add_var("[D4 Demo] Has Child 13-17", has_13_17.astype(int), valid_mask)
+        add_var("[D4 Demo] Has Child <6", has_u6.astype(int), base_100)
+        add_var("[D4 Demo] Has Child 6-12", has_6_12.astype(int), base_100)
+        add_var("[D4 Demo] Has Child 13-17", has_13_17.astype(int), base_100)
 
     for q_code, label in CATEGORIES.items():
-        if q_code in df.columns: 
-            valid_mask = pd.to_numeric(df[q_code], errors='coerce').notna()
-            add_var(f"[Quota Category] Buyer: {label}", pd.to_numeric(df[q_code], errors='coerce').fillna(0).astype(int), valid_mask)
-            
+        if q_code in df.columns: add_var(f"[Quota Category] Buyer: {label}", pd.to_numeric(df[q_code], errors='coerce').fillna(0).astype(int), base_100)
     for c_idx, c_name in P3M_CATS.items():
         col = f"S6_r{c_idx}_c1" 
-        if col in df.columns: 
-            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-            add_var(f"[S6 Category] P3M Self: {c_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
+        if col in df.columns: add_var(f"[S6 Category] P3M Self: {c_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), base_100)
 
     for b_idx, b_name in BRANDS.items():
-        if f"Q1_{b_idx}" in df.columns: 
-            valid_mask = pd.to_numeric(df[f"Q1_{b_idx}"], errors='coerce').notna()
-            add_var(f"[Q1 Brand] Purchased: {b_name}", pd.to_numeric(df[f"Q1_{b_idx}"], errors='coerce').fillna(0).astype(int), valid_mask)
-        if f"Q4_{b_idx}" in df.columns: 
-            valid_mask = pd.to_numeric(df[f"Q4_{b_idx}"], errors='coerce').notna()
-            add_var(f"[Q4 Rejectors/Favs] HH Favorite: {b_name}", pd.to_numeric(df[f"Q4_{b_idx}"], errors='coerce').fillna(0).astype(int), valid_mask)
-        if f"Q5_{b_idx}" in df.columns: 
-            valid_mask = pd.to_numeric(df[f"Q5_{b_idx}"], errors='coerce').notna()
-            add_var(f"[Q5 Brand] Most Recent Purch: {b_name}", pd.to_numeric(df[f"Q5_{b_idx}"], errors='coerce').fillna(0).astype(int), valid_mask)
-        if f"Q7_{b_idx}" in df.columns: 
-            valid_mask = pd.to_numeric(df[f"Q7_{b_idx}"], errors='coerce').notna()
-            add_var(f"[Q7 Rejectors/Favs] Never Consider: {b_name}", pd.to_numeric(df[f"Q7_{b_idx}"], errors='coerce').fillna(0).astype(int), valid_mask)
+        if f"Q1_{b_idx}" in df.columns: add_var(f"[Q1 Brand] Purchased: {b_name}", pd.to_numeric(df[f"Q1_{b_idx}"], errors='coerce').fillna(0).astype(int), base_100)
+        if f"Q4_{b_idx}" in df.columns: add_var(f"[Q4 Rejectors/Favs] HH Favorite: {b_name}", pd.to_numeric(df[f"Q4_{b_idx}"], errors='coerce').fillna(0).astype(int), base_100)
+        if f"Q5_{b_idx}" in df.columns: add_var(f"[Q5 Brand] Most Recent Purch: {b_name}", pd.to_numeric(df[f"Q5_{b_idx}"], errors='coerce').fillna(0).astype(int), base_100)
+        if f"Q7_{b_idx}" in df.columns: add_var(f"[Q7 Rejectors/Favs] Never Consider: {b_name}", pd.to_numeric(df[f"Q7_{b_idx}"], errors='coerce').fillna(0).astype(int), base_100)
 
-    q8_cols = [c for c in df.columns if c.startswith('Q8_')]
-    for col in q8_cols:
+    for v_idx, v_name in MRI_VALUES.items():
+        if f"Q18_{v_idx}" in df.columns: add_var(f"[Q18 Psycho] Core Value: {v_name}", pd.to_numeric(df[f"Q18_{v_idx}"], errors='coerce').fillna(0).astype(int), base_100)
+    for r_idx, r_name in KIDS_ATTITUDES.items():
+        if f"Q13_r{r_idx}" in df.columns: add_var(f"[Q13 Kids Attitudes] {r_name}", pd.to_numeric(df[f"Q13_r{r_idx}"], errors='coerce').fillna(0), base_100)
+    for idx, name in BEV_ATTITUDES_1.items():
+        if f"Q16_{idx}" in df.columns: add_var(f"[Q16 Bev Attitudes] {name}", pd.to_numeric(df[f"Q16_{idx}"], errors='coerce').fillna(0).astype(int), base_100)
+    for idx, name in BEV_ATTITUDES_2.items():
+        if f"Q16x2_{idx}" in df.columns: add_var(f"[Q16x2 Bev Attitudes] {name}", pd.to_numeric(df[f"Q16x2_{idx}"], errors='coerce').fillna(0).astype(int), base_100)
+    for r_idx, r_name in BRAND_ATTITUDES.items():
+        for b_idx, b_name in BRANDS.items():
+            if f"Q17_r{r_idx}_c{b_idx}" in df.columns: add_var(f"[Q17 Brand Attitude] {r_name} - {b_name}", pd.to_numeric(df[f"Q17_r{r_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int), base_100)
+    for q_code, english_stmt in PSYCHOGRAPHICS.items():
+        if q_code in df.columns: add_var(f"[{q_code.split('_')[0]} Psycho] {english_stmt}", pd.to_numeric(df[q_code], errors='coerce').fillna(0), base_100)
+
+    # 2. Quota / Skip Groups
+    q8_mask = get_block_valid_mask([c for c in df.columns if c.startswith('Q8_')])
+    for col in [c for c in df.columns if c.startswith('Q8_')]:
         parts = col.replace('Q8_', '').split('.')
         if len(parts) == 2 and parts[1].isdigit():
-            b_idx = int(parts[1])
-            b_name = BRANDS.get(b_idx, "Unknown")
-            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-            add_var(f"[Q8 Brand] Variety code {parts[0]} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
+            b_name = BRANDS.get(int(parts[1]), "Unknown")
+            add_var(f"[Q8 Brand] Variety code {parts[0]} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), q8_mask)
+
+    brand_masks = {}
+    for b_idx in BRANDS.keys():
+        b_cols = [f"Q2_r{c}_c{b_idx}" for c in CHANNELS.keys()] + \
+                 [f"Q3_r{s}_c{b_idx}" for s in SIZES.keys()] + \
+                 [f"Q6_{w}.{b_idx}" for w in WHY_CHOOSE.keys()] + \
+                 [f"Q9_r{w}_c{b_idx}" for w in WHO_DRINKS.keys()] + \
+                 [f"Q9aa_{a}.{b_idx}" for a in OTHER_ADULT_AGES.keys()] + \
+                 [f"Q9a_r{w}_c{b_idx}" for w in WHEN_HOW.keys()] + \
+                 [f"Q9b_c{b_idx}", f"Q14_c{b_idx}"]
+        brand_masks[b_idx] = get_block_valid_mask(b_cols)
 
     for c_idx, c_name in CHANNELS.items():
         for b_idx, b_name in BRANDS.items():
-            col = f"Q2_r{c_idx}_c{b_idx}"
-            if col in df.columns: 
-                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-                add_var(f"[Q2 Channel] {c_name} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
-
+            if f"Q2_r{c_idx}_c{b_idx}" in df.columns: add_var(f"[Q2 Channel] {c_name} - {b_name}", pd.to_numeric(df[f"Q2_r{c_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int), brand_masks[b_idx])
     for s_idx, s_name in SIZES.items():
         for b_idx, b_name in BRANDS.items():
-            col = f"Q3_r{s_idx}_c{b_idx}"
-            if col in df.columns: 
-                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-                add_var(f"[Q3 Size] {s_name} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
-
+            if f"Q3_r{s_idx}_c{b_idx}" in df.columns: add_var(f"[Q3 Size] {s_name} - {b_name}", pd.to_numeric(df[f"Q3_r{s_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int), brand_masks[b_idx])
     for w_idx, w_name in WHY_CHOOSE.items():
         for b_idx, b_name in BRANDS.items():
-            col = f"Q6_{w_idx}.{b_idx}"
-            if col in df.columns: 
-                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-                add_var(f"[Q6 Why Choose] {w_name} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
-
+            if f"Q6_{w_idx}.{b_idx}" in df.columns: add_var(f"[Q6 Why Choose] {w_name} - {b_name}", pd.to_numeric(df[f"Q6_{w_idx}.{b_idx}"], errors='coerce').fillna(0).astype(int), brand_masks[b_idx])
     for w_idx, w_name in WHO_DRINKS.items():
         for b_idx, b_name in BRANDS.items():
-            col = f"Q9_r{w_idx}_c{b_idx}"
-            if col in df.columns: 
-                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-                add_var(f"[Q9 Who Drinks] {w_name} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
-    
+            if f"Q9_r{w_idx}_c{b_idx}" in df.columns: add_var(f"[Q9 Who Drinks] {w_name} - {b_name}", pd.to_numeric(df[f"Q9_r{w_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int), brand_masks[b_idx])
     for a_idx, a_name in OTHER_ADULT_AGES.items():
         for b_idx, b_name in BRANDS.items():
-            col = f"Q9aa_{a_idx}.{b_idx}"
-            if col in df.columns: 
-                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-                add_var(f"[Q9aa Who Drinks] Other Adult ({a_name}) - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
-
+            if f"Q9aa_{a_idx}.{b_idx}" in df.columns: add_var(f"[Q9aa Who Drinks] Other Adult ({a_name}) - {b_name}", pd.to_numeric(df[f"Q9aa_{a_idx}.{b_idx}"], errors='coerce').fillna(0).astype(int), brand_masks[b_idx])
     for w_idx, w_name in WHEN_HOW.items():
         for b_idx, b_name in BRANDS.items():
-            col = f"Q9a_r{w_idx}_c{b_idx}"
-            if col in df.columns: 
-                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-                add_var(f"[Q9a When/How] {w_name} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
-                
+            if f"Q9a_r{w_idx}_c{b_idx}" in df.columns: add_var(f"[Q9a When/How] {w_name} - {b_name}", pd.to_numeric(df[f"Q9a_r{w_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int), brand_masks[b_idx])
     for b_idx, b_name in BRANDS.items():
-        col_freq = f"Q9b_c{b_idx}"
-        if col_freq in df.columns:
-            valid_mask = pd.to_numeric(df[col_freq], errors='coerce').notna()
-            s_num = pd.to_numeric(df[col_freq], errors='coerce')
-            for f_idx, f_name in FREQUENCY.items(): 
-                add_var(f"[Q9b Frequency] {f_name} - {b_name}", (s_num == f_idx).astype(int), valid_mask)
-                
-        col_reas = f"Q14_c{b_idx}"
-        if col_reas in df.columns:
-            valid_mask = pd.to_numeric(df[col_reas], errors='coerce').notna()
-            s_num = pd.to_numeric(df[col_reas], errors='coerce')
-            for r_idx, r_name in REASONS.items(): 
-                add_var(f"[Q14 Reason] {r_name} - {b_name}", (s_num == r_idx).astype(int), valid_mask)
+        if f"Q9b_c{b_idx}" in df.columns:
+            s_num = pd.to_numeric(df[f"Q9b_c{b_idx}"], errors='coerce')
+            for f_idx, f_name in FREQUENCY.items(): add_var(f"[Q9b Frequency] {f_name} - {b_name}", (s_num == f_idx).astype(int), brand_masks[b_idx])
+        if f"Q14_c{b_idx}" in df.columns:
+            s_num = pd.to_numeric(df[f"Q14_c{b_idx}"], errors='coerce')
+            for r_idx, r_name in REASONS.items(): add_var(f"[Q14 Reason] {r_name} - {b_name}", (s_num == r_idx).astype(int), brand_masks[b_idx])
 
-    q5_cols = [c for c in df.columns if c.startswith('Q5a')]
-    if q5_cols:
-        valid_mask = pd.to_numeric(df[q5_cols[0]], errors='coerce').notna()
-        s_num = pd.to_numeric(df[q5_cols[0]], errors='coerce')
-        for r_idx, r_name in RECENT_PURCHASE.items():
-            add_var(f"[Q5a Buying Styles] Recent Purch: {r_name}", (s_num == r_idx).astype(int), valid_mask)
+    q5a_mask = get_block_valid_mask([c for c in df.columns if c.startswith('Q5a')])
+    if q5a_mask.any():
+        cols = [c for c in df.columns if c.startswith('Q5a')]
+        s_num = pd.to_numeric(df[cols[0]], errors='coerce')
+        for r_idx, r_name in RECENT_PURCHASE.items(): add_var(f"[Q5a Buying Styles] Recent Purch: {r_name}", (s_num == r_idx).astype(int), q5a_mask)
             
+    q15_mask = get_block_valid_mask(['Q15'])
     if 'Q15' in df.columns:
-        valid_mask = pd.to_numeric(df['Q15'], errors='coerce').notna()
         s_num = pd.to_numeric(df['Q15'], errors='coerce')
-        for r_idx, r_name in CONSUMPTION_CHANGE.items():
-            add_var(f"[Q15 Buying Styles] Consumption: {r_name}", (s_num == r_idx).astype(int), valid_mask)
+        for r_idx, r_name in CONSUMPTION_CHANGE.items(): add_var(f"[Q15 Buying Styles] Consumption: {r_name}", (s_num == r_idx).astype(int), q15_mask)
             
-    q_map = {'Q10': 'OJ', 'Q11': 'Lemonade', 'Q12': 'Other Juice'}
-    for q_code, q_label in q_map.items():
+    for q_code, q_label in {'Q10': 'OJ', 'Q11': 'Lemonade', 'Q12': 'Other Juice'}.items():
+        q_cols = [q_code] + [c for c in df.columns if c.startswith(f"{q_code}a_") or c.startswith(f"{q_code}b_")]
+        q_mask = get_block_valid_mask(q_cols)
         if q_code in df.columns:
-            valid_mask = pd.to_numeric(df[q_code], errors='coerce').notna()
             s_num = pd.to_numeric(df[q_code], errors='coerce')
-            for l_idx, l_name in LOYALTY_APPROACH.items(): 
-                add_var(f"[{q_code} Buying Styles] Approach to {q_label}: {l_name}", (s_num == l_idx).astype(int), valid_mask)
-                
+            for l_idx, l_name in LOYALTY_APPROACH.items(): add_var(f"[{q_code} Buying Styles] Approach to {q_label}: {l_name}", (s_num == l_idx).astype(int), q_mask)
         for p_idx, p_name in PURCHASE_DRIVERS.items():
-            c_a = f"{q_code}a_{p_idx}"
-            if c_a in df.columns: 
-                valid_mask = pd.to_numeric(df[c_a], errors='coerce').notna()
-                add_var(f"[{q_code}a Buying Styles] Adult Driver ({q_label}): {p_name}", pd.to_numeric(df[c_a], errors='coerce').fillna(0).astype(int), valid_mask)
-            c_b = f"{q_code}b_{p_idx}"
-            if c_b in df.columns: 
-                valid_mask = pd.to_numeric(df[c_b], errors='coerce').notna()
-                add_var(f"[{q_code}b Buying Styles] Kids Driver ({q_label}): {p_name}", pd.to_numeric(df[c_b], errors='coerce').fillna(0).astype(int), valid_mask)
+            if f"{q_code}a_{p_idx}" in df.columns: add_var(f"[{q_code}a Buying Styles] Adult Driver ({q_label}): {p_name}", pd.to_numeric(df[f"{q_code}a_{p_idx}"], errors='coerce').fillna(0).astype(int), q_mask)
+            if f"{q_code}b_{p_idx}" in df.columns: add_var(f"[{q_code}b Buying Styles] Kids Driver ({q_label}): {p_name}", pd.to_numeric(df[f"{q_code}b_{p_idx}"], errors='coerce').fillna(0).astype(int), q_mask)
 
-    for v_idx, v_name in MRI_VALUES.items():
-        col = f"Q18_{v_idx}"
-        if col in df.columns: 
-            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-            add_var(f"[Q18 Psycho] Core Value: {v_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
-
-    for r_idx, r_name in KIDS_ATTITUDES.items():
-        col = f"Q13_r{r_idx}"
-        if col in df.columns: 
-            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-            add_var(f"[Q13 Kids Attitudes] {r_name}", pd.to_numeric(df[col], errors='coerce').fillna(0), valid_mask)
-            
-    for idx, name in BEV_ATTITUDES_1.items():
-        col = f"Q16_{idx}"
-        if col in df.columns: 
-            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-            add_var(f"[Q16 Bev Attitudes] {name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
-            
-    for idx, name in BEV_ATTITUDES_2.items():
-        col = f"Q16x2_{idx}"
-        if col in df.columns: 
-            valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-            add_var(f"[Q16x2 Bev Attitudes] {name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
-            
-    for r_idx, r_name in BRAND_ATTITUDES.items():
-        for b_idx, b_name in BRANDS.items():
-            col = f"Q17_r{r_idx}_c{b_idx}"
-            if col in df.columns: 
-                valid_mask = pd.to_numeric(df[col], errors='coerce').notna()
-                add_var(f"[Q17 Brand Attitude] {r_name} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), valid_mask)
-                
-    for q_code, english_stmt in PSYCHOGRAPHICS.items():
-        if q_code in df.columns: 
-            valid_mask = pd.to_numeric(df[q_code], errors='coerce').notna()
-            add_var(f"[{q_code.split('_')[0]} Psycho] {english_stmt}", pd.to_numeric(df[q_code], errors='coerce').fillna(0), valid_mask)
-
+    # 3. Raw Auto-Catch
     known_prefixes = ('S2', 'S3', 'S4', 'S6', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11',
                       'Q1_', 'Q2_', 'Q3_', 'Q4_', 'Q5_', 'Q5a', 'Q6_', 'Q7_', 'Q8_', 'Q9_', 'Q9a_', 'Q9aa_', 'Q9b_', 
                       'Q10', 'Q11', 'Q12', 'Q13_', 'Q14_', 'Q15', 'Q16_', 'Q16x2', 'Q17_', 'Q18_', 'Q19_', 'Q20_', 
@@ -292,16 +229,12 @@ def load_and_prep_data(file):
     ignore_substrings = ['Quota', 'EndQ', 'sys_', 'Data_', 'botCheck', 'captcha', 'IP_', 'Unnamed', 'CS', 'UniqueResp', 'ListPanel', 'OverallStartQ', 'PanelQ', 'S7', 'S5', 'Q7a', 'Q7Resp_', 'Q8Product', 'Q5Product', 'Q7Rejectors', 'Q8Buyers', 'Q18xMRIxCoding', 'StraightxLiners', 'P', 'L1']
     
     for c in df.columns:
-        if c == 'Weight': continue
-        if any(sub in c for sub in ignore_substrings): continue
-        if any(c.startswith(p) for p in known_prefixes): continue
-        
+        if c == 'Weight' or any(sub in c for sub in ignore_substrings) or any(c.startswith(p) for p in known_prefixes): continue
         unique_vals = df[c].dropna().unique()
         if len(unique_vals) > 1 and len(unique_vals) <= 15:
-            valid_mask = df[c].astype(str).str.strip() != ''
+            valid_mask = get_block_valid_mask([c])
             for val in unique_vals:
-                if str(val).strip() != '':
-                    add_var(f"[{c} Raw] Answer: {val}", (df[c] == val).astype(int), valid_mask)
+                if str(val).strip() != '': add_var(f"[{c} Raw] Answer: {val}", (df[c] == val).astype(int), valid_mask)
 
     return df_clean, df_valid
 
@@ -545,7 +478,6 @@ if uploaded_file:
 
         st.markdown("---")
         
-        # --- THE FIX: UX SEARCH AND FLIPPED LAYOUT ---
         st.markdown("### ⬇️ 1. Select Columns (Banners)")
         col_search_all = st.multiselect("🔍 Universal Search (Type a keyword, brand, or Q-number):", all_vars_for_selection, key="c_search_all")
         
@@ -563,9 +495,7 @@ if uploaded_file:
             with ex_c4: col_reas = st.multiselect("Drivers & Perceptions", CAT_REASONS + CAT_PERCEPTIONS, key="c_reas")
 
             col_segs = st.multiselect("Saved Segments", st.session_state['created_segments'], default=st.session_state['created_segments'], key="c_segs")
-            
-            if CAT_RAW:
-                col_raw = st.multiselect("Raw Variables", CAT_RAW, key="c_raw")
+            if CAT_RAW: col_raw = st.multiselect("Raw Variables", CAT_RAW, key="c_raw")
             else: col_raw = []
 
         raw_ct_cols = col_search_all + col_demos + col_cats + col_brands + col_psycho + col_buy + col_favs + col_chan + col_reas + col_segs + col_raw
@@ -589,9 +519,7 @@ if uploaded_file:
             with ex_r4: row_reas = st.multiselect("Drivers & Perceptions ", CAT_REASONS + CAT_PERCEPTIONS, key="r_reas")
             
             row_segs = st.multiselect("Saved Segments ", st.session_state['created_segments'], key="r_segs")
-
-            if CAT_RAW:
-                row_raw = st.multiselect("Raw Variables ", CAT_RAW, key="r_raw")
+            if CAT_RAW: row_raw = st.multiselect("Raw Variables ", CAT_RAW, key="r_raw")
             else: row_raw = []
 
         raw_ct_rows = row_search_all + row_demos + row_cats + row_brands + row_psycho + row_buy + row_favs + row_chan + row_reas + row_segs + row_raw
@@ -612,16 +540,17 @@ if uploaded_file:
             total_weighted = st.session_state['df_working']['Weight'].sum()
             
             export_data = []
-            universe_row = ["Total Survey Universe / Base"]
+            universe_row = ["Total Survey Universe / Valid Base"]
             
             col_baselines = {}
+            
+            # 1. Compute Column sizes for the "Total Survey Universe" Row
             for c in ct_cols:
                 is_scale = (("Psycho]" in c) and ("Core Value" not in c)) or ("Kids Attitudes]" in c)
                 if is_scale:
                     logic = ct_logic_dict.get(c, "Any Agree (1 or 2 combined)")
                     col_mask = get_scale_mask(st.session_state['df_working'], c, logic)
-                    short_suffix = logic.split(" (")[0]
-                    c_label = f"{c} ({short_suffix})"
+                    c_label = f"{c} ({logic.split(' (')[0]})"
                 else:
                     col_mask = st.session_state['df_working'][c] == 1
                     c_label = c
@@ -632,17 +561,17 @@ if uploaded_file:
                 c_valid_weighted = st.session_state['df_working'][c_valid_mask]['Weight'].sum()
                 
                 col_baselines[c] = {"mask": col_mask, "valid": c_valid_mask, "label": c_label}
-                universe_row.extend([col_unweighted, 1.00, (col_weighted / c_valid_weighted) if c_valid_weighted > 0 else 0, 100])
+                universe_row.extend([col_unweighted, (col_weighted / c_valid_weighted) if c_valid_weighted > 0 else 0, col_weighted / total_weighted, 100])
                 
             export_data.append(universe_row[:1] + [total_unweighted, 1.00, 1.00, 100] + universe_row[1:])
             
+            # 2. Compute Crosstab intersections
             for r in ct_rows:
                 is_scale = (("Psycho]" in r) and ("Core Value" not in r)) or ("Kids Attitudes]" in r)
                 if is_scale:
                     logic = ct_logic_dict.get(r, "Any Agree (1 or 2 combined)")
                     r_mask = get_scale_mask(st.session_state['df_working'], r, logic)
-                    short_suffix = logic.split(" (")[0]
-                    r_label = f"{r} ({short_suffix})"
+                    r_label = f"{r} ({logic.split(' (')[0]})"
                 else:
                     r_mask = st.session_state['df_working'][r] == 1
                     r_label = r
@@ -665,6 +594,7 @@ if uploaded_file:
                     cross_unweighted = len(st.session_state['df_working'][cross_mask])
                     cross_weighted = st.session_state['df_working'][cross_mask]['Weight'].sum()
                     
+                    # The dynamic cell base: "How many people in the Column were actually asked the Row question?"
                     valid_for_cell_mask = c_mask & r_valid_mask
                     cell_base_wgt = st.session_state['df_working'][valid_for_cell_mask]['Weight'].sum()
                     
