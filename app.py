@@ -207,7 +207,7 @@ def load_and_prep_data(file):
             if f"Q17_r{r_idx}_c{b_idx}" in df.columns: df_clean[f"[Brand Attitude] {r_name} - {b_name}"] = pd.to_numeric(df[f"Q17_r{r_idx}_c{b_idx}"], errors='coerce').fillna(0).astype(int)
     for q_code, english_stmt in PSYCHOGRAPHICS.items():
         if q_code in df.columns: df_clean[f"[Psychographics] {english_stmt}"] = pd.to_numeric(df[q_code], errors='coerce').fillna(0)
-
+            
     return df_clean
 
 def get_scale_mask(dataframe, column_name, logic_string):
@@ -305,12 +305,6 @@ if uploaded_file:
     with tab1:
         st.subheader("Create a Custom Segment")
         
-        search_query_t1 = st.text_input("🔍 Search to quickly find a variable for your segment (e.g., 'White', 'Simply'):", key="t1_search")
-        if search_query_t1:
-            matched_vars_t1 = [c for c in all_cols if search_query_t1.lower() in c.lower()]
-            if matched_vars_t1: st.info(f"Matches found: {', '.join(matched_vars_t1[:5])}...")
-            else: st.warning("No matches found.")
-        
         col_pool, col_mand = st.columns(2)
         with col_pool:
             st.markdown("### A. Threshold Statement Pool")
@@ -400,22 +394,6 @@ if uploaded_file:
     with tab2:
         st.subheader("Build a Custom Crosstab")
         
-        st.markdown("### 🔍 Global Search")
-        search_query = st.text_input("Type a keyword to instantly find any variable (e.g., 'Orange Juice', 'Walmart', 'Optimist'):", key="ct_search")
-        
-        row_search_res = []
-        col_search_res = []
-        if search_query:
-            matched_vars = [c for c in all_cols + st.session_state['created_segments'] if search_query.lower() in c.lower()]
-            if matched_vars:
-                st.success(f"Found {len(matched_vars)} matching variables for '{search_query}'")
-                s_col1, s_col2 = st.columns(2)
-                with s_col1: row_search_res = st.multiselect("➕ Add matches to Rows:", matched_vars, key="r_search")
-                with s_col2: col_search_res = st.multiselect("➕ Add matches to Columns:", matched_vars, key="c_search")
-            else:
-                st.warning("No variables found matching your search.")
-
-        st.markdown("---")
         with st.expander("⚡ Quick Combiner (AND / OR Logic)", expanded=False):
             st.markdown("Instantly combine variables to use in your crosstabs without leaving this tab. *(Note: Any 1-4 scale Attitudes selected here will automatically be evaluated as 'Any Agree').*")
             qc_cols = st.columns([3, 1, 2])
@@ -440,7 +418,7 @@ if uploaded_file:
                         st.rerun()
 
         st.markdown("---")
-        st.markdown("### 📂 Or Select From Categories")
+        st.markdown("### 📂 Select From Categories")
         st.markdown("##### ➡️ Select Rows")
         r_col1, r_col2, r_col3, r_col4 = st.columns(4)
         with r_col1: row_demos = st.multiselect("Demographics", CAT_DEMOS, key="r_demo")
@@ -455,7 +433,7 @@ if uploaded_file:
             with ex_r3: row_chan = st.multiselect("Channels & Occasions", CAT_CHANNELS, key="r_chan")
             with ex_r4: row_reas = st.multiselect("Drivers & Perceptions", CAT_REASONS + CAT_PERCEPTIONS, key="r_reas")
             
-        raw_ct_rows = row_demos + row_cats + row_brands + row_psycho + row_buy + row_favs + row_chan + row_reas + st.session_state['created_segments'] + row_search_res
+        raw_ct_rows = row_demos + row_cats + row_brands + row_psycho + row_buy + row_favs + row_chan + row_reas + st.session_state['created_segments']
         ct_rows = list(dict.fromkeys([x for x in raw_ct_rows if x]))
         
         st.markdown("---")
@@ -473,7 +451,7 @@ if uploaded_file:
             with ex_c3: col_chan = st.multiselect("Channels & Occasions ", CAT_CHANNELS, key="c_chan")
             with ex_c4: col_reas = st.multiselect("Drivers & Perceptions ", CAT_REASONS + CAT_PERCEPTIONS, key="c_reas")
 
-        raw_ct_cols = col_demos + col_cats + col_brands + col_psycho + col_buy + col_favs + col_chan + col_reas + st.session_state['created_segments'] + col_search_res
+        raw_ct_cols = col_demos + col_cats + col_brands + col_psycho + col_buy + col_favs + col_chan + col_reas + st.session_state['created_segments']
         ct_cols = list(dict.fromkeys([x for x in raw_ct_cols if x]))
         
         if ct_rows and ct_cols:
