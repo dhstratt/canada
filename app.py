@@ -360,14 +360,13 @@ if uploaded_file:
             else: meets_mandatory = pd.Series(True, index=matches_df.index)
                 
             temp_segment = (meets_threshold & meets_mandatory).astype(int)
-            raw_match = int(temp_segment.sum())
-            total_weighted = st.session_state['df_working']['Weight'].sum()
-            weighted_match = st.session_state['df_working'][temp_segment == 1]['Weight'].sum()
             
-            # --- THE FIX: DYNAMIC PREVIEW ---
-            # Added safe division to prevent silent ZeroDivisionErrors from breaking the UI
-            pct_market = (weighted_match / total_weighted * 100) if total_weighted > 0 else 0
-            st.success(f"📊 **Dynamic Preview:** This configuration currently captures **{raw_match:,}** respondents ({pct_market:.1f}% of total market).")
+            # --- THE FIX: DYNAMIC PREVIEW (UNWEIGHTED POPULATION PERCENTAGE) ---
+            raw_match = int(temp_segment.sum())
+            total_unw = len(st.session_state['df_working'])
+            
+            pct_market = (raw_match / total_unw * 100) if total_unw > 0 else 0
+            st.success(f"📊 **Dynamic Preview:** This configuration currently captures **{raw_match:,}** respondents ({pct_market:.1f}% of total population).")
             
             with col_save:
                 segment_name = st.text_input("Name your Segment:", value="New Segment 1")
@@ -378,45 +377,39 @@ if uploaded_file:
                         st.session_state['created_segments'].append(segment_name)
                         st.rerun()
 
-        # --- THE FIX: NEW SAVED SEGMENTS DISPLAY ---
+        # --- THE FIX: NEW SAVED SEGMENTS DISPLAY (UNWEIGHTED POPULATION PERCENTAGE) ---
         st.markdown("---")
         st.subheader("📏 Saved Segments Sizing")
         if st.session_state['created_segments']:
             sizing_data = []
-            total_pop = st.session_state['df_working']['Weight'].sum()
+            total_unw = len(st.session_state['df_working'])
             
             # 1. Visual Metric Cards
             metric_cols = st.columns(min(len(st.session_state['created_segments']), 4))
             
             for i, seg in enumerate(st.session_state['created_segments']):
-                seg_wgt = st.session_state['df_working'][st.session_state['df_working'][seg] == 1]['Weight'].sum()
                 seg_unw = len(st.session_state['df_working'][st.session_state['df_working'][seg] == 1])
-                market_share = (seg_wgt / total_pop) if total_pop > 0 else 0
+                pop_share = (seg_unw / total_unw) if total_unw > 0 else 0
                 
                 # Render the large visual metric
                 with metric_cols[i % 4]:
-                    st.metric(label=f"🎯 {seg}", value=f"{int(seg_wgt):,}", delta=f"{market_share * 100:.1f}% Market Share", delta_color="off")
+                    st.metric(label=f"🎯 {seg}", value=f"{seg_unw:,}", delta=f"{pop_share * 100:.1f}% of Population", delta_color="off")
                     
                 sizing_data.append({
                     "Segment Name": seg, 
-                    "Unweighted Count": seg_unw, 
-                    "Weighted Count": int(seg_wgt), 
-                    # Multiply by 100 here so Streamlit's native formatter renders it properly
-                    "Market Share (%)": market_share * 100 
+                    "Count": seg_unw, 
+                    "Population Share (%)": pop_share * 100 
                 })
             
-            # 2. Data Table (Using Streamlit's native column_config instead of Pandas Styler)
+            # 2. Data Table (Using Streamlit's native column_config)
             st.markdown("<br>", unsafe_allow_html=True)
             st.dataframe(
                 pd.DataFrame(sizing_data),
                 column_config={
-                    "Market Share (%)": st.column_config.NumberColumn(
+                    "Population Share (%)": st.column_config.NumberColumn(
                         format="%.1f%%"
                     ),
-                    "Unweighted Count": st.column_config.NumberColumn(
-                        format="%d"
-                    ),
-                    "Weighted Count": st.column_config.NumberColumn(
+                    "Count": st.column_config.NumberColumn(
                         format="%d"
                     )
                 },
