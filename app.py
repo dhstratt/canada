@@ -78,8 +78,6 @@ def load_and_prep_data(file):
     else: df = pd.read_excel(file)
         
     df_clean = pd.DataFrame()
-    if 'Weight' in df.columns: df_clean['Weight'] = df['Weight']
-    else: df_clean['Weight'] = 1.0
 
     # 1. Base Demographics
     for col, value_map in DEMO_MAP.items():
@@ -251,7 +249,7 @@ if uploaded_file:
                 st.session_state['file_name'] = uploaded_file.name
             st.sidebar.success(f"Loaded Master File: {len(df_base)} Respondents!")
     
-    all_cols = [c for c in st.session_state['df_working'].columns if c != "Weight" and c not in st.session_state['created_segments']]
+    all_cols = [c for c in st.session_state['df_working'].columns if c not in st.session_state['created_segments']]
     
     # UI Categories
     CAT_DEMOS = [c for c in all_cols if c.startswith("[Demo]")]
@@ -382,14 +380,12 @@ if uploaded_file:
             sizing_data = []
             total_unw = len(st.session_state['df_working'])
             
-            # 1. Visual Metric Cards
             metric_cols = st.columns(min(len(st.session_state['created_segments']), 4))
             
             for i, seg in enumerate(st.session_state['created_segments']):
                 seg_unw = len(st.session_state['df_working'][st.session_state['df_working'][seg] == 1])
                 pop_share = (seg_unw / total_unw) if total_unw > 0 else 0
                 
-                # Render the large visual metric
                 with metric_cols[i % 4]:
                     st.metric(label=f"🎯 {seg}", value=f"{seg_unw:,}", delta=f"{pop_share * 100:.1f}% of Population", delta_color="off")
                     
@@ -399,7 +395,6 @@ if uploaded_file:
                     "Population Share (%)": pop_share * 100 
                 })
             
-            # 2. Data Table (Using Streamlit's native column_config)
             st.markdown("<br>", unsafe_allow_html=True)
             st.dataframe(
                 pd.DataFrame(sizing_data),
@@ -454,7 +449,6 @@ if uploaded_file:
         with r_col3: row_brands = st.multiselect("Brands & Products", CAT_BRANDS, key="r_brand")
         with r_col4: row_psycho = st.multiselect("Attitudes", CAT_ATTITUDES, key="r_psycho")
         
-        # --- NEW CODE: DEDICATED CUSTOM SEGMENT ROW DROPDOWN ---
         row_custom = []
         if st.session_state['created_segments']:
             st.markdown("<br>", unsafe_allow_html=True)
@@ -467,7 +461,6 @@ if uploaded_file:
             with ex_r3: row_chan = st.multiselect("Channels & Occasions", CAT_CHANNELS, key="r_chan")
             with ex_r4: row_reas = st.multiselect("Drivers & Perceptions", CAT_REASONS + CAT_PERCEPTIONS, key="r_reas")
             
-        # Updated to grab row_custom instead of blindly pulling all created_segments
         raw_ct_rows = row_demos + row_cats + row_brands + row_psycho + row_buy + row_favs + row_chan + row_reas + row_custom
         ct_rows = list(dict.fromkeys([x for x in raw_ct_rows if x]))
         
@@ -479,7 +472,6 @@ if uploaded_file:
         with c_col3: col_brands = st.multiselect("Brands & Products ", CAT_BRANDS, key="c_brand")
         with c_col4: col_psycho = st.multiselect("Attitudes ", CAT_ATTITUDES, key="c_psycho")
         
-        # --- NEW CODE: DEDICATED CUSTOM SEGMENT COLUMN DROPDOWN ---
         col_custom = []
         if st.session_state['created_segments']:
             st.markdown("<br>", unsafe_allow_html=True)
@@ -492,7 +484,6 @@ if uploaded_file:
             with ex_c3: col_chan = st.multiselect("Channels & Occasions ", CAT_CHANNELS, key="c_chan")
             with ex_c4: col_reas = st.multiselect("Drivers & Perceptions ", CAT_REASONS + CAT_PERCEPTIONS, key="c_reas")
 
-        # Updated to grab col_custom instead of blindly pulling all created_segments
         raw_ct_cols = col_demos + col_cats + col_brands + col_psycho + col_buy + col_favs + col_chan + col_reas + col_custom
         ct_cols = list(dict.fromkeys([x for x in raw_ct_cols if x]))
         
@@ -507,8 +498,10 @@ if uploaded_file:
                         with t_col:
                             ct_logic_dict[v] = st.selectbox(f"{v[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"ct_logic_all_{v}")
 
+            # =====================================================================
+            # THE FIX: PURE UNWEIGHTED CROSSTAB CALCULATIONS 
+            # =====================================================================
             total_unweighted = len(st.session_state['df_working'])
-            total_weighted = st.session_state['df_working']['Weight'].sum()
             
             export_data = []
             universe_row = ["Study Universe", total_unweighted, 1.00, 1.00, 100]
@@ -526,9 +519,10 @@ if uploaded_file:
                     c_label = c
                     
                 col_unweighted = len(st.session_state['df_working'][col_mask])
-                col_weighted = st.session_state['df_working'][col_mask]['Weight'].sum()
-                col_baselines[c] = {"unw": col_unweighted, "wgt": col_weighted, "mask": col_mask, "label": c_label}
-                universe_row.extend([col_unweighted, 1.00, (col_weighted / total_weighted) if total_weighted > 0 else 0, 100])
+                col_baselines[c] = {"unw": col_unweighted, "mask": col_mask, "label": c_label}
+                
+                # Math fix: Use Unweighted exclusively
+                universe_row.extend([col_unweighted, 1.00, (col_unweighted / total_unweighted) if total_unweighted > 0 else 0, 100])
                 
             export_data.append(universe_row)
             
@@ -543,20 +537,21 @@ if uploaded_file:
                     r_mask = st.session_state['df_working'][r] == 1
                     r_label = r
                 
+                # Math fix: Use Unweighted exclusively
                 stmt_unweighted = len(st.session_state['df_working'][r_mask])
-                stmt_weighted = st.session_state['df_working'][r_mask]['Weight'].sum()
-                stmt_vert_pct = (stmt_weighted / total_weighted) if total_weighted > 0 else 0
+                stmt_vert_pct = (stmt_unweighted / total_unweighted) if total_unweighted > 0 else 0
                 
                 r_data = [r_label, stmt_unweighted, stmt_vert_pct, 1.00, 100]
                 
                 for c in ct_cols:
                     c_mask = col_baselines[c]["mask"]
-                    cross_unweighted = len(st.session_state['df_working'][r_mask & c_mask])
-                    cross_weighted = st.session_state['df_working'][r_mask & c_mask]['Weight'].sum()
                     
-                    col_wgt_base = col_baselines[c]["wgt"]
-                    vert_pct = (cross_weighted / col_wgt_base) if col_wgt_base > 0 else 0
-                    horz_pct = (cross_weighted / stmt_weighted) if stmt_weighted > 0 else 0
+                    # Math fix: Use Unweighted exclusively
+                    cross_unweighted = len(st.session_state['df_working'][r_mask & c_mask])
+                    
+                    col_unw_base = col_baselines[c]["unw"]
+                    vert_pct = (cross_unweighted / col_unw_base) if col_unw_base > 0 else 0
+                    horz_pct = (cross_unweighted / stmt_unweighted) if stmt_unweighted > 0 else 0
                     idx_score = (vert_pct / stmt_vert_pct * 100) if stmt_vert_pct > 0 else 0
                     
                     r_data.extend([cross_unweighted, vert_pct, horz_pct, int(round(idx_score, 0))])
@@ -647,7 +642,8 @@ if uploaded_file:
                     else: 
                         c_mask = st.session_state['df_working'][c] == 1
                         
-                    val = st.session_state['df_working'][r_mask & c_mask]['Weight'].sum()
+                    # Math fix: Use Unweighted exclusively
+                    val = len(st.session_state['df_working'][r_mask & c_mask])
                     r_data.append(val)
                 map_matrix.append(r_data)
             
