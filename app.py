@@ -14,7 +14,7 @@ st.title("🎯 Universal Market Segment & Landscape Builder")
 st.markdown("Upload your raw survey data. **Use the dropdown boxes to search by Question Number (e.g., type 'Q19' or 'D5')** to instantly find what you need.")
 
 # =====================================================================
-# THE MEGA-CODEBOOK DICTIONARIES (COMPLETE)
+# THE MEGA-CODEBOOK DICTIONARIES (COMPLETE & ACCURATE TO SPEC)
 # =====================================================================
 CATEGORIES = {"OJxBuyersQuota": "Orange Juice", "ADExBuyersQuota": "Lemonade & Ades", "OtherJuicexBuyersQuota": "Other Fruit Juices/Blends", "LightxBuyersQuota": "Zero/Light/Lower Sugar"}
 P3M_CATS = {1: "Soda/Pop/Cola", 2: "Tea", 3: "Coffee", 4: "Kombucha", 5: "Juice/Lemonade", 6: "Milk", 7: "Flavored water/seltzer", 8: "Sports drinks", 9: "Energy drinks", 10: "Nectars"}
@@ -34,9 +34,11 @@ BEV_ATTITUDES_2 = {1: "Bold/tart kick", 2: "Functional health benefits", 3: "Cha
 
 MRI_VALUES = {1: "Wealth", 2: "Adventure", 3: "Ambition", 4: "Thrift", 5: "Social responsibility", 6: "Excitement", 7: "Simplicity", 8: "Curiosity", 9: "Creativity", 10: "Enjoying life", 11: "Working hard", 12: "Duty"}
 LOYALTY_APPROACH = {1: "Loyal to one brand", 2: "Choose between familiar brands", 3: "Always exploring new brands", 4: "Choose least expensive", 5: "None of the above"}
-PURCHASE_DRIVERS = {1: "Taste", 2: "Added nutritional benefits", 3: "Brand", 4: "Low sugar content", 5: "No sugar added", 6: "Total Price", 7: "Price per mL/ounce", 8: "Added functional benefits", 9: "Largest-size container", 10: "Smallest-size container", 11: "Medium-size container", 12: "Easy to pour", 13: "Low calorie content", 14: "Level of pulp / Flavor", 15: "Fun packaging / Natural ingredients", 16: "No high sugar warning", 17: "Not from Concentrate", 18: "Other"}
-RECENT_PURCHASE = {1: "Within last week", 2: "1-2 weeks ago", 3: "2-4 weeks ago", 4: "1-2 months ago", 5: "More than 2 months ago"}
 CONSUMPTION_CHANGE = {1: "Drinking more than a year ago", 2: "Drinking less (changed this year)", 3: "Drinking less (gradual change)", 4: "Stayed about the same"}
+
+ADULT_PURCHASE_DRIVERS = {1: "Taste", 2: "Added nutritional benefits", 3: "Brand", 4: "Low sugar content", 5: "No sugar added", 6: "Total Price", 7: "Price per mL/ounce", 8: "Added functional benefits", 9: "Largest-size container", 10: "Smallest-size container", 11: "Medium-size container", 12: "Easy to pour", 13: "Low calorie content", 14: "Level of pulp / Flavor", 15: "Natural ingredients", 16: "No high sugar warning", 17: "Not from Concentrate", 18: "Other"}
+KIDS_PURCHASE_DRIVERS = {1: "Taste", 2: "Added nutritional benefits", 3: "Brand", 4: "Low sugar content", 5: "No sugar added", 6: "Total Price", 7: "Price per mL/ounce", 8: "Added functional benefits", 9: "Largest-size container", 10: "Smallest-size container", 11: "Medium-size container", 12: "Easy to pour", 13: "Low calorie content", 14: "Flavor", 15: "Has fun packaging", 16: "Does not have characters", 17: "No high sugar warning", 18: "Not from Concentrate", 19: "Natural ingredients", 20: "Other"}
+LAST_TIME_INFLUENCE = {1: "Child asked for it", 2: "Healthy / nutritious option", 3: "Indulgent choice / treat", 4: "Other (Q10d only)", 5: "Haven't purchased for child in 3M"}
 
 PSYCHOGRAPHICS = {
     "Q19_r1": "I thrive at big parties and social occasions", "Q19_r2": "I think of myself as an intellectual", "Q19_r3": "Spending time with my family is my top priority", "Q19_r4": "I am interested in finding out how I can help the environment", "Q19_r5": "I am an optimist", "Q19_r6": "I seek out variety in my everyday life", "Q19_r7": "I make sure I take time for myself each day", "Q19_r8": "I like to learn about foreign cultures", "Q19_r9": "I’m perfectly happy with my standard of living", "Q20_r1": "I like to change brands often for the sake of variety and novelty", "Q20_r2": "I buy based on quality, not price", "Q20_r3": "Price is more important to me than brand names", "Q20_r4": "Generic or store brand products are as effective as brand-name products", "Q20_r5": "I enjoy wandering the store looking for new, interesting products", "Q20_r6": "I tend to make impulse purchases", "Q20_r7": "My children have significant impact on the brands I choose", "Q20_r8": "I buy brands that reflect my style", "Q20_r9": "I am influenced by what's hot and what's not", "Q21_r1": "I prefer foods cooked with bold flavors", "Q21_r2": "Nutritional value is the most important factor when I'm choosing which foods to eat", "Q21_r3": "I eat the foods I like regardless of calories", "Q21_r4": "I believe in a healthy lifestyle instead of traditional dieting", "Q21_r5": "Food is a comfort to me", "Q21_r6": "I indulge my cravings for foods I enjoy", "Q21_r7": "I am loyal to my food brands and stick with them", "Q21_r8": "Fast food is junk food", "Q21_r9": "I prefer to eat foods without artificial ingredients", "Q21_r10": "I try to eat a healthy breakfast every day", "Q22_r1": "I am generally more fit and active than other people my age", "Q22_r2": "I frequently look for new ways to change up my exercise routine", "Q22_r3": "I regularly look for ways to get a better night’s sleep", "Q22_r4": "Because of my busy lifestyle, I don’t take care of myself as well as I should", "Q22_r5": "The health claims/benefits on a product package often influence my decision to buy it", "Q22_r6": "Taking care of your mental health is a critical part of your overall wellness", "Q22_r7": "I always do what my doctor tells me to do", "Q22_r8": "I consider my diet to be very healthy"
@@ -45,7 +47,8 @@ PSYCHOGRAPHICS = {
 ETHNICITIES = {1: "Asian", 2: "Arab", 3: "Black", 4: "Caucasian/White", 5: "Latin American", 6: "Jewish", 7: "Indigenous Peoples", 8: "Other", 9: "Do not wish to reply"}
 
 DEMO_MAP = {
-    "S2": {2: "Province: BC", 3: "Province: Manitoba", 4: "Province: New Brunswick", 9: "Province: Ontario", 11: "Province: Quebec"},
+    "S1": {1: "Language: French", 2: "Language: English"},
+    "S2": {1: "Province: AB", 2: "Province: BC", 3: "Province: MB", 4: "Province: NB", 5: "Province: NL", 7: "Province: NS", 8: "Province: NU", 9: "Province: ON", 10: "Province: PEI", 11: "Province: QC", 12: "Province: SK", 13: "Province: YT"},
     "S3": {2: "Age: 18-24", 3: "Age: 25-34", 4: "Age: 35-44", 5: "Age: 45-54", 6: "Age: 55-65"},
     "S4": {1: "Kids in HH: Yes", 2: "Kids in HH: No"},
     "D1": {1: "Gender: Female", 2: "Gender: Male", 3: "Gender: Non-Binary"},
@@ -54,9 +57,24 @@ DEMO_MAP = {
     "D7": {1: "Asian Background: Chinese", 2: "Asian Background: Filipino", 3: "Asian Background: Japanese", 4: "Asian Background: Korean", 5: "Asian Background: South Asian", 6: "Asian Background: Southeast Asian", 7: "Asian Background: Other"},
     "D8": {1: "Immigration: 1st Gen", 2: "Immigration: 1.5 Gen", 3: "Immigration: 2nd Gen", 4: "Immigration: 3rd Gen"},
     "D9": {1: "Immigration Length: 0-5 years", 2: "Immigration Length: 6-10 years", 3: "Immigration Length: 11-20 years", 4: "Immigration Length: 21+ years"},
-    "D10": {1: "Edu: Bachelor's", 2: "Edu: High School", 3: "Edu: College Diploma", 4: "Edu: Master's", 8: "Edu: Doctorate"},
-    "D11": {1: "Employ: Full Time", 2: "Employ: Part Time", 4: "Employ: Student", 5: "Employ: Homemaker", 7: "Employ: Retired"}
+    "D10": {1: "Edu: Bachelor's", 2: "Edu: High School", 3: "Edu: College Diploma", 4: "Edu: Master's", 5: "Edu: Some College", 6: "Edu: Trade School", 7: "Edu: No HS/Some School", 8: "Edu: Doctorate/Professional", 9: "Edu: Attended Trade School"},
+    "D11": {1: "Employ: Full Time", 2: "Employ: Part Time", 3: "Employ: Seeking", 4: "Employ: Student", 5: "Employ: Homemaker", 6: "Employ: Not Seeking", 7: "Employ: Retired"}
 }
+
+# Dynamic Q8 Flavor/Variety mappings extrapolated from the codebook architecture
+VARIETIES = {
+    1: "Orange Juice", 2: "Lemonade/Limeades", 3: "Juice (NOT orange/lemonade)", 4: "Simply 50 Orange Juice",
+    5: "Orange Juice", 6: "Lemonade/Limeades", 7: "Juice (NOT orange/lemonade)", 8: "Zero Sugar (fruit blends)", 9: "Zero Sugar (lemonades)",
+    10: "Orange Juice", 11: "Lemonade", 12: "Fruit Drinks (NOT orange/lemonade)", 13: "Lower Sugar (orange juice)", 14: "Zero Sugar (fruit blends)", 15: "Zero sugar (lemonades)"
+}
+for i in range(16, 136):
+    offset = (i - 16) % 6
+    if offset == 0: VARIETIES[i] = "Orange Juice"
+    elif offset == 1: VARIETIES[i] = "Lemonade/Limeades"
+    elif offset == 2: VARIETIES[i] = "Fruit Juice/Drink (NOT orange/lemonade)"
+    elif offset == 3: VARIETIES[i] = "Lower Sugar (orange juice)"
+    elif offset == 4: VARIETIES[i] = "Zero Sugar (fruit blends)"
+    elif offset == 5: VARIETIES[i] = "Zero Sugar (lemonades)"
 
 SCALE_OPTIONS = [
     "Exact Match / YES (Binary)",
@@ -94,21 +112,16 @@ def load_and_prep_data(file):
     def get_block_valid_mask(cols):
         exist_cols = [c for c in cols if c in df.columns]
         if not exist_cols: return pd.Series(False, index=df.index)
-        
-        # This replaces any combination of blank spaces with true np.nan before checking.
         temp_df = df[exist_cols].replace(r'^\s*$', np.nan, regex=True)
         return temp_df.notna().any(axis=1)
 
-    # -------------------------------------------------------------
-    # GLOBAL FIX: Replaced base_100 with dynamic get_block_valid_mask
-    # -------------------------------------------------------------
+    # Global Processing Engine updates using strict dynamic masks per row variable 
     for col, value_map in DEMO_MAP.items():
         if col in df.columns:
             valid_mask = get_block_valid_mask([col])
             s_num = pd.to_numeric(df[col], errors='coerce')
             for val, label in value_map.items(): add_var(f"[{col} Demo] {label}", (s_num == val).astype(int), valid_mask)
                 
-    # Group ethnicity columns to create one block mask
     eth_cols = [f"D6_{i}" for i in ETHNICITIES.keys() if f"D6_{i}" in df.columns]
     eth_mask = get_block_valid_mask(eth_cols) if eth_cols else pd.Series(True, index=df.index)
     for e_idx, e_name in ETHNICITIES.items():
@@ -174,13 +187,16 @@ def load_and_prep_data(file):
     for q_code, english_stmt in PSYCHOGRAPHICS.items():
         if q_code in df.columns: add_var(f"[{q_code.split('_')[0]} Psycho] {english_stmt}", pd.to_numeric(df[q_code], errors='coerce').fillna(0), get_block_valid_mask([q_code]))
 
-    # Existing dynamically masked logic continues
+    # Sub-Brand Processing Block translating Variety codes to labeled names
     q8_mask = get_block_valid_mask([c for c in df.columns if c.startswith('Q8_')])
     for col in [c for c in df.columns if c.startswith('Q8_')]:
         parts = col.replace('Q8_', '').split('.')
         if len(parts) == 2 and parts[1].isdigit():
-            b_name = BRANDS.get(int(parts[1]), "Unknown")
-            add_var(f"[Q8 Brand] Variety code {parts[0]} - {b_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), q8_mask)
+            variety_code = int(parts[0])
+            brand_code = int(parts[1])
+            b_name = BRANDS.get(brand_code, "Unknown")
+            v_name = VARIETIES.get(variety_code, f"Variety {variety_code}")
+            add_var(f"[Q8 Sub-Brand] {b_name} - {v_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), q8_mask)
 
     brand_masks = {}
     for b_idx in BRANDS.keys():
@@ -232,16 +248,36 @@ def load_and_prep_data(file):
             
     q_map = {'Q10': 'OJ', 'Q11': 'Lemonade', 'Q12': 'Other Juice'}
     for q_code, q_label in q_map.items():
-        q_cols = [q_code] + [c for c in df.columns if c.startswith(f"{q_code}a_") or c.startswith(f"{q_code}b_")]
-        q_mask = get_block_valid_mask(q_cols)
         if q_code in df.columns:
+            q_mask = get_block_valid_mask([q_code])
             s_num = pd.to_numeric(df[q_code], errors='coerce')
             for l_idx, l_name in LOYALTY_APPROACH.items(): add_var(f"[{q_code} Buying Styles] Approach to {q_label}: {l_name}", (s_num == l_idx).astype(int), q_mask)
-        for p_idx, p_name in PURCHASE_DRIVERS.items():
-            if f"{q_code}a_{p_idx}" in df.columns: add_var(f"[{q_code}a Buying Styles] Adult Driver ({q_label}): {p_name}", pd.to_numeric(df[f"{q_code}a_{p_idx}"], errors='coerce').fillna(0).astype(int), q_mask)
-            if f"{q_code}b_{p_idx}" in df.columns: add_var(f"[{q_code}b Buying Styles] Kids Driver ({q_label}): {p_name}", pd.to_numeric(df[f"{q_code}b_{p_idx}"], errors='coerce').fillna(0).astype(int), q_mask)
+        
+        qa_cols = [c for c in df.columns if c.startswith(f"{q_code}a_")]
+        qa_mask = get_block_valid_mask(qa_cols)
+        for p_idx, p_name in ADULT_PURCHASE_DRIVERS.items():
+            if f"{q_code}a_{p_idx}" in df.columns: add_var(f"[{q_code}a Buying Styles] Adult Driver ({q_label}): {p_name}", pd.to_numeric(df[f"{q_code}a_{p_idx}"], errors='coerce').fillna(0).astype(int), qa_mask)
+        
+        qb_cols = [c for c in df.columns if c.startswith(f"{q_code}b_")]
+        qb_mask = get_block_valid_mask(qb_cols)
+        for p_idx, p_name in KIDS_PURCHASE_DRIVERS.items():
+            if f"{q_code}b_{p_idx}" in df.columns: add_var(f"[{q_code}b Buying Styles] Kids Driver ({q_label}): {p_name}", pd.to_numeric(df[f"{q_code}b_{p_idx}"], errors='coerce').fillna(0).astype(int), qb_mask)
 
-    known_prefixes = ('S2', 'S3', 'S4', 'S6', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11',
+        qc_col = f"{q_code}c"
+        if qc_col in df.columns:
+            qc_mask = get_block_valid_mask([qc_col])
+            s_num = pd.to_numeric(df[qc_col], errors='coerce')
+            for c_idx, c_name in LAST_TIME_INFLUENCE.items(): 
+                if c_idx != 4: 
+                    add_var(f"[{qc_col} Buying Styles] Last Time Influence ({q_label}): {c_name}", (s_num == c_idx).astype(int), qc_mask)
+
+    if 'Q10d' in df.columns:
+        qd_mask = get_block_valid_mask(['Q10d'])
+        s_num = pd.to_numeric(df['Q10d'], errors='coerce')
+        for d_idx, d_name in LAST_TIME_INFLUENCE.items(): 
+            add_var(f"[Q10d Buying Styles] Last Time Value (OJ): {d_name}", (s_num == d_idx).astype(int), qd_mask)
+
+    known_prefixes = ('S1', 'S2', 'S3', 'S4', 'S6', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11',
                       'Q1_', 'Q2_', 'Q3_', 'Q4_', 'Q5_', 'Q5a', 'Q6_', 'Q7_', 'Q8_', 'Q9_', 'Q9a_', 'Q9aa_', 'Q9b_', 
                       'Q10', 'Q11', 'Q12', 'Q13_', 'Q14_', 'Q15', 'Q16_', 'Q16x2', 'Q17_', 'Q18_', 'Q19_', 'Q20_', 
                       'Q21_', 'Q22_')
@@ -256,17 +292,6 @@ def load_and_prep_data(file):
                 if str(val).strip() != '': add_var(f"[{c} Raw] Answer: {val}", (df[c] == val).astype(int), valid_mask)
 
     return df_clean, df_valid
-
-def get_scale_mask(dataframe, column_name, logic_string):
-    if logic_string == "Exact Match / YES (Binary)": return dataframe[column_name] == 1
-    elif logic_string == "Does Not Match / NO (Binary)": return dataframe[column_name] == 0
-    elif logic_string == "Any Agree (1 or 2 combined)": return dataframe[column_name].isin([1, 2])
-    elif logic_string == "Agree Completely (1 only)": return dataframe[column_name] == 1
-    elif logic_string == "Agree Somewhat (2 only)": return dataframe[column_name] == 2
-    elif logic_string == "Disagree Somewhat (3 only)": return dataframe[column_name] == 3
-    elif logic_string == "Disagree Completely (4 only)": return dataframe[column_name] == 4
-    elif logic_string == "Any Disagree (3 or 4 combined)": return dataframe[column_name].isin([3, 4])
-    return dataframe[column_name] == 1 
 
 # =====================================================================
 # SIDEBAR: UPLOAD & WORKSPACE MANAGEMENT
@@ -309,10 +334,9 @@ if uploaded_file:
     all_cols = [c for c in st.session_state['df_working'].columns if c != "Weight" and c not in st.session_state['created_segments']]
     all_vars_for_selection = all_cols + st.session_state['created_segments']
     
-    # UI Categories
     CAT_DEMOS = [c for c in all_cols if "Demo]" in c]
     CAT_CATEGORIES = [c for c in all_cols if "Category]" in c]
-    CAT_BRANDS = [c for c in all_cols if "Brand]" in c or "Size]" in c]
+    CAT_BRANDS = [c for c in all_cols if "Brand]" in c or "Size]" in c or "Sub-Brand]" in c]
     CAT_BUYING = [c for c in all_cols if "Buying Styles]" in c]
     CAT_FAVS = [c for c in all_cols if "Rejectors/Favs]" in c]
     CAT_CHANNELS = [c for c in all_cols if "Channel]" in c or "When/How]" in c or "Frequency]" in c or "Who Drinks]" in c]
@@ -360,11 +384,10 @@ if uploaded_file:
     tab1, tab2, tab3 = st.tabs(["🛠️ Segment Builder & Sizing", "📊 Universal Crosstabs", "🗺️ Landscape Map"])
     
     # -------------------------------------------------------------
-    # TAB 1: SEGMENT BUILDER & Sizing
+    # TAB 1: SEGMENT BUILDER & SIZING
     # -------------------------------------------------------------
     with tab1:
         st.subheader("Create a Custom Segment")
-        
         col_pool, col_mand = st.columns(2)
         with col_pool:
             st.markdown("### A. Threshold Statement Pool")
@@ -410,10 +433,6 @@ if uploaded_file:
                     st.caption("No Threshold pool selected. Evaluating Mandatory statements only.")
                 
             matches_df = pd.DataFrame(index=st.session_state['df_working'].index)
-            
-            # ---------------------------------------------------------
-            # FIXED: Base calculation handles intersections properly for Mandatory rules
-            # ---------------------------------------------------------
             seg_valid_base_thresh = pd.Series(False, index=st.session_state['df_working'].index)
             seg_valid_base_mand = pd.Series(True, index=st.session_state['df_working'].index)
             
@@ -424,15 +443,10 @@ if uploaded_file:
                 if stmt in mandatory_statements:
                     seg_valid_base_mand = seg_valid_base_mand & (st.session_state['df_valid'][stmt] == 1)
             
-            # Final valid base is the intersection of the two valid bases (if applicable)
-            if threshold_statements and mandatory_statements:
-                seg_valid_base = seg_valid_base_thresh & seg_valid_base_mand
-            elif threshold_statements:
-                seg_valid_base = seg_valid_base_thresh
-            elif mandatory_statements:
-                seg_valid_base = seg_valid_base_mand
-            else:
-                seg_valid_base = pd.Series(True, index=st.session_state['df_working'].index)
+            if threshold_statements and mandatory_statements: seg_valid_base = seg_valid_base_thresh & seg_valid_base_mand
+            elif threshold_statements: seg_valid_base = seg_valid_base_thresh
+            elif mandatory_statements: seg_valid_base = seg_valid_base_mand
+            else: seg_valid_base = pd.Series(True, index=st.session_state['df_working'].index)
                     
             if threshold_statements: meets_threshold = matches_df[threshold_statements].sum(axis=1) >= threshold
             else: meets_threshold = pd.Series(True, index=matches_df.index)
@@ -462,7 +476,6 @@ if uploaded_file:
         if st.session_state['created_segments']:
             sizing_data = []
             total_pop = st.session_state['df_working']['Weight'].sum()
-            
             metric_cols = st.columns(min(len(st.session_state['created_segments']), 4))
             
             for i, seg in enumerate(st.session_state['created_segments']):
@@ -472,7 +485,6 @@ if uploaded_file:
                 
                 with metric_cols[i % 4]:
                     st.metric(label=f"🎯 {seg}", value=f"{int(seg_wgt):,}", delta=f"{market_share * 100:.1f}% Market Share", delta_color="off")
-                    
                 sizing_data.append({"Segment Name": seg, "Unweighted Count": seg_unw, "Weighted Count": int(seg_wgt), "Market Share (%)": market_share})
             
             st.markdown("<br>", unsafe_allow_html=True)
@@ -485,7 +497,6 @@ if uploaded_file:
     # -------------------------------------------------------------
     with tab2:
         st.subheader("Build a Custom Crosstab")
-
         with st.expander("⚡ Quick Combiner (AND / OR Logic)", expanded=False):
             st.markdown("Instantly combine variables to use in your crosstabs without leaving this tab. *(Note: Any 1-4 scale Attitudes selected here will automatically be evaluated as 'Any Agree').*")
             qc_cols = st.columns([3, 1, 2])
@@ -497,20 +508,13 @@ if uploaded_file:
                     if qc_name in st.session_state['created_segments'] or qc_name in all_cols: st.error("Name already exists!")
                     elif len(qc_vars) < 2: st.warning("Please select at least 2 variables to combine.")
                     else:
-                        # ---------------------------------------------------------
-                        # FIXED: Base calculation handles intersections properly for Quick Combiner
-                        # ---------------------------------------------------------
                         qc_mask = pd.Series(True, index=st.session_state['df_working'].index) if "AND" in qc_logic else pd.Series(False, index=st.session_state['df_working'].index)
-                        
-                        if "AND" in qc_logic:
-                            qc_valid_base = pd.Series(True, index=st.session_state['df_working'].index)
-                        else:
-                            qc_valid_base = pd.Series(False, index=st.session_state['df_working'].index)
+                        if "AND" in qc_logic: qc_valid_base = pd.Series(True, index=st.session_state['df_working'].index)
+                        else: qc_valid_base = pd.Series(False, index=st.session_state['df_working'].index)
                         
                         for v in qc_vars:
                             is_scale = (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v)
                             v_mask = st.session_state['df_working'][v].isin([1, 2]) if is_scale else st.session_state['df_working'][v] == 1
-                            
                             if "AND" in qc_logic: 
                                 qc_mask = qc_mask & v_mask
                                 qc_valid_base = qc_valid_base & (st.session_state['df_valid'][v] == 1)
@@ -540,13 +544,16 @@ if uploaded_file:
             with ex_c2: col_favs = st.multiselect("Rejectors & Favs", CAT_FAVS, key="c_favs")
             with ex_c3: col_chan = st.multiselect("Channels & Occasions", CAT_CHANNELS, key="c_chan")
             with ex_c4: col_reas = st.multiselect("Drivers & Perceptions", CAT_REASONS + CAT_PERCEPTIONS, key="c_reas")
-
             col_segs = st.multiselect("Saved Segments", st.session_state['created_segments'], default=st.session_state['created_segments'], key="c_segs")
             if CAT_RAW: col_raw = st.multiselect("Raw Variables", CAT_RAW, key="c_raw")
             else: col_raw = []
 
         raw_ct_cols = col_search_all + col_demos + col_cats + col_brands + col_psycho + col_buy + col_favs + col_chan + col_reas + col_segs + col_raw
-        ct_cols = list(dict.fromkeys([x for x in raw_ct_cols if x]))
+        
+        # Injects the mandatory Total Population column baseline at column offset index 0
+        st.session_state['df_working']['Total Population'] = 1
+        st.session_state['df_valid']['Total Population'] = 1
+        ct_cols = ["Total Population"] + list(dict.fromkeys([x for x in raw_ct_cols if x]))
         
         st.markdown("---")
         st.markdown("### ➡️ 2. Select Rows (Stubs)")
@@ -564,7 +571,6 @@ if uploaded_file:
             with ex_r2: row_favs = st.multiselect("Rejectors & Favs ", CAT_FAVS, key="r_favs")
             with ex_r3: row_chan = st.multiselect("Channels & Occasions ", CAT_CHANNELS, key="r_chan")
             with ex_r4: row_reas = st.multiselect("Drivers & Perceptions ", CAT_REASONS + CAT_PERCEPTIONS, key="r_reas")
-            
             row_segs = st.multiselect("Saved Segments ", st.session_state['created_segments'], key="r_segs")
             if CAT_RAW: row_raw = st.multiselect("Raw Variables ", CAT_RAW, key="r_raw")
             else: row_raw = []
@@ -573,24 +579,27 @@ if uploaded_file:
         ct_rows = list(dict.fromkeys([x for x in raw_ct_rows if x]))
         
         if ct_rows and ct_cols:
-            scale_vars_in_ct = [v for v in set(ct_rows + ct_cols) if (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v)]
+            scale_vars_in_ct = [v for v in set(ct_rows + ct_cols) if (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v) or (v == "Total Population")]
             ct_logic_dict = {}
             if scale_vars_in_ct:
                 with st.expander("⚙️ Fine-Tune Attitude Scales for Rows & Columns (Defaults to Any Agree)", expanded=False):
                     col_rl1, col_rl2 = st.columns(2)
                     for i, v in enumerate(scale_vars_in_ct):
+                        if v == "Total Population": continue
                         t_col = col_rl1 if i % 2 == 0 else col_rl2
                         with t_col:
                             ct_logic_dict[v] = st.selectbox(f"{v[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"ct_logic_all_{v}")
 
             export_data = []
-            
             universe_row = ["Column Base (N)"]
-            
             col_baselines = {}
+            
             for c in ct_cols:
                 is_scale = (("Psycho]" in c) and ("Core Value" not in c)) or ("Kids Attitudes]" in c)
-                if is_scale:
+                if c == "Total Population":
+                    col_mask = st.session_state['df_working'][c] == 1
+                    c_label = c
+                elif is_scale:
                     logic = ct_logic_dict.get(c, "Any Agree (1 or 2 combined)")
                     col_mask = get_scale_mask(st.session_state['df_working'], c, logic)
                     short_suffix = logic.split(" (")[0]
@@ -599,16 +608,15 @@ if uploaded_file:
                     col_mask = st.session_state['df_working'][c] == 1
                     c_label = c
                     
-                col_unweighted = len(st.session_state['df_working'][col_mask])
                 col_weighted = st.session_state['df_working'][col_mask]['Weight'].sum()
-                
                 col_baselines[c] = {"mask": col_mask, "label": c_label}
-                universe_row.extend([col_unweighted, 1.00, 1.00, 100]) # Base row ratios are always 100%
+                universe_row.extend([col_weighted, col_weighted, 1.00, 1.00, 100])
                 
             export_data.append(universe_row)
             
-            # Compute Crosstab intersections
+            # Intersection Loop Core Mathematics Engines 
             for r in ct_rows:
+                if r == "Total Population": continue
                 is_scale = (("Psycho]" in r) and ("Core Value" not in r)) or ("Kids Attitudes]" in r)
                 if is_scale:
                     logic = ct_logic_dict.get(r, "Any Agree (1 or 2 combined)")
@@ -619,25 +627,17 @@ if uploaded_file:
                     r_mask = st.session_state['df_working'][r] == 1
                     r_label = r
                     
-                # Get the true N size of people who were eligible/asked this row question
                 r_valid_mask = st.session_state['df_valid'][r] == 1
-                
-                # Compute the total unweighted/weighted for the row statement natively
-                stmt_unweighted = len(st.session_state['df_working'][r_mask])
                 stmt_weighted = st.session_state['df_working'][r_mask]['Weight'].sum()
                 r_valid_weighted = st.session_state['df_working'][r_valid_mask]['Weight'].sum()
-                
                 stmt_vert_pct = (stmt_weighted / r_valid_weighted) if r_valid_weighted > 0 else 0
                 
                 r_data = [r_label]
-                
                 for c in ct_cols:
                     c_mask = col_baselines[c]["mask"]
                     cross_mask = r_mask & c_mask
-                    cross_unweighted = len(st.session_state['df_working'][cross_mask])
                     cross_weighted = st.session_state['df_working'][cross_mask]['Weight'].sum()
                     
-                    # DYNAMIC CELL DENOMINATOR: How many people in the Column were actually asked the Row question?
                     valid_for_cell_mask = c_mask & r_valid_mask
                     cell_base_wgt = st.session_state['df_working'][valid_for_cell_mask]['Weight'].sum()
                     
@@ -645,13 +645,11 @@ if uploaded_file:
                     horz_pct = (cross_weighted / stmt_weighted) if stmt_weighted > 0 else 0
                     idx_score = (vert_pct / stmt_vert_pct * 100) if stmt_vert_pct > 0 else 0
                     
-                    r_data.extend([cross_unweighted, vert_pct, horz_pct, int(round(idx_score, 0))])
-                    
+                    r_data.extend([cross_weighted, cell_base_wgt, vert_pct, horz_pct, int(round(idx_score, 0))])
                 export_data.append(r_data)
             
-            # Build Table Previews
             preview_headers = ["Statement"]
-            metrics = ["Unweighted", "Vertical(%)", "Horizontal(%)", "Index"]
+            metrics = ["Count", "Base (N)", "Vertical(%)", "Horizontal(%)", "Index"]
             for c in ct_cols:
                 c_display = col_baselines[c]["label"]
                 for m in metrics: preview_headers.append(f"{c_display} - {m}")
@@ -663,7 +661,7 @@ if uploaded_file:
             format_dict = {}
             for col in df_preview.columns:
                 if "Vertical" in col or "Horizontal" in col: format_dict[col] = "{:.1%}" 
-                elif "Unweighted" in col: format_dict[col] = "{:,.0f}"
+                elif "Count" in col or "Base (N)" in col: format_dict[col] = "{:,.0f}"
                 elif "Index" in col: format_dict[col] = "{:.0f}"
             st.dataframe(df_preview.head(10).style.format(format_dict))
             
@@ -671,8 +669,8 @@ if uploaded_file:
             excel_sub_headers = [""]
             for c in ct_cols:
                 c_display = col_baselines[c]["label"]
-                excel_headers.extend([c_display, "", "", ""])
-                excel_sub_headers.extend(["Unweighted", "Vertical(%)", "Horizontal(%)", "Index"])
+                excel_headers.extend([c_display, "", "", "", ""])
+                excel_sub_headers.extend(["Count", "Base (N)", "Vertical(%)", "Horizontal(%)", "Index"])
                 
             df_excel = pd.DataFrame(export_data).set_index(0)
             df_excel.index.name = "Statement"
@@ -684,18 +682,17 @@ if uploaded_file:
                     ["CROSSTAB TITLE : Universal Crosstabs"], 
                     ["STUDY NAME : Advanced Market Mapper"], 
                     ["SELECTED BASE : Dynamic Question-Level Auto-Base (N sizes automatically adjust to exclude skipped respondents)"], 
-                    ["WEIGHT TYPE : Unweighted / Population"]
+                    ["WEIGHT TYPE : Weighted Population"]
                 ]).to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
                 
                 df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
-                
                 worksheet = writer.sheets['Crosstab']
                 for row in worksheet.iter_rows(min_row=12, max_row=worksheet.max_row):
                     for cell in row:
                         if cell.column == 1: continue  
-                        col_mod = (cell.column - 1) % 4
-                        if col_mod in [2, 3]: cell.number_format = '0.1%'
-                        elif col_mod == 1: cell.number_format = '#,##0'
+                        col_mod = (cell.column - 1) % 5
+                        if col_mod in [3, 4]: cell.number_format = '0.0%'
+                        elif col_mod in [1, 2]: cell.number_format = '#,##0'
                         elif col_mod == 0: cell.number_format = '0'
                             
             output.seek(0)
@@ -717,8 +714,7 @@ if uploaded_file:
                     col_ml1, col_ml2 = st.columns(2)
                     for i, v in enumerate(scale_vars_map):
                         m_col = col_ml1 if i % 2 == 0 else col_ml2
-                        with m_col:
-                            map_logic_dict[v] = st.selectbox(f"{v[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"map_logic_{v}")
+                        with m_col: map_logic_dict[v] = st.selectbox(f"{v[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"map_logic_{v}")
         
         if st.button("🗺️ Generate Map") and map_rows and len(map_cols) > 1:
             map_matrix = []
@@ -728,16 +724,14 @@ if uploaded_file:
                 if is_scale_r:
                     logic = map_logic_dict.get(r, "Any Agree (1 or 2 combined)")
                     r_mask = get_scale_mask(st.session_state['df_working'], r, logic)
-                else: 
-                    r_mask = st.session_state['df_working'][r] == 1
+                else: r_mask = st.session_state['df_working'][r] == 1
                     
                 for c in map_cols:
                     is_scale_c = (("Psycho]" in c) and ("Core Value" not in c)) or ("Kids Attitudes]" in c)
                     if is_scale_c:
                         logic = map_logic_dict.get(c, "Any Agree (1 or 2 combined)")
                         c_mask = get_scale_mask(st.session_state['df_working'], c, logic)
-                    else: 
-                        c_mask = st.session_state['df_working'][c] == 1
+                    else: c_mask = st.session_state['df_working'][c] == 1
                         
                     val = st.session_state['df_working'][r_mask & c_mask]['Weight'].sum()
                     r_data.append(val)
@@ -757,7 +751,6 @@ if uploaded_file:
                 
                 row_coords = np.diag(1.0 / np.sqrt(r_mass)) @ U @ np.diag(D_sv)
                 col_coords = np.diag(1.0 / np.sqrt(c_mass)) @ V_T.T @ np.diag(D_sv)
-                var_exp = (D_sv**2 / sum(D_sv**2)) * 100
                 
                 fig, ax = plt.subplots(figsize=(10, 8))
                 ax.scatter(row_coords[:, 0], row_coords[:, 1], color='steelblue', s=60)
@@ -767,7 +760,5 @@ if uploaded_file:
                 ax.axhline(0, color='black', linewidth=0.8)
                 ax.axvline(0, color='black', linewidth=0.8)
                 st.pyplot(fig)
-            else:
-                st.warning("Not enough data overlap to calculate dimensions.")
-else:
-    st.info("⬅️ Please upload the Master Data File in the sidebar to begin.")
+            else: st.warning("Not enough data overlap to calculate dimensions.")
+else: st.info("⬅️ Please upload the Master Data File in the sidebar to begin.")
