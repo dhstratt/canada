@@ -94,7 +94,11 @@ def load_and_prep_data(file):
     def get_block_valid_mask(cols):
         exist_cols = [c for c in cols if c in df.columns]
         if not exist_cols: return pd.Series(False, index=df.index)
-        return df[exist_cols].astype(str).replace(' ', np.nan).notna().any(axis=1)
+        
+        # FIX: Replaced .astype(str) to prevent turning true nulls into the string "nan".
+        # This replaces any combination of blank spaces with true np.nan before checking.
+        temp_df = df[exist_cols].replace(r'^\s*$', np.nan, regex=True)
+        return temp_df.notna().any(axis=1)
 
     base_100 = pd.Series(True, index=df.index)
     
