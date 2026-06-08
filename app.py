@@ -613,20 +613,6 @@ if uploaded_file:
                         st.rerun()
 
         st.markdown("---")
-        st.markdown("### 🥞 Dynamic Universe Base (Optional)")
-        st.markdown("Use this to restrict the entire crosstab to a specific subset of people (e.g., Only buyers of Q1 brands). The crosstab will automatically replace 'Total Population' with your Custom Base, and all columns will only calculate percentages against these unique people.")
-        
-        use_custom_base = st.checkbox("Enable Custom Universe Base", key="use_custom_base")
-        base_cols = []
-        if use_custom_base:
-            base_cols = render_checkbox_search("base_cols", "Variables to Define Base", all_vars_for_selection)
-            if base_cols:
-                person_mask = (st.session_state['df_working'][base_cols].notna() & (st.session_state['df_working'][base_cols] != 0)).any(axis=1)
-                unweighted_people = person_mask.sum()
-                weighted_people = st.session_state['df_working'].loc[person_mask, 'Weight'].sum()
-                st.success(f"🎯 **Custom Base Preview:** {unweighted_people:,.0f} Unweighted Unique People | **{weighted_people:,.0f} Weighted Unique People**")
-
-        st.markdown("---")
         st.markdown("### Columns")
         col_search_all = render_checkbox_search("col_main", "Selected Column Variables", all_vars_for_selection)
         
@@ -678,16 +664,9 @@ if uploaded_file:
                     
                     df_ct_work = st.session_state['df_working'].copy()
                     
-                    # Apply Custom Base Filter IF toggled
-                    if use_custom_base and base_cols:
-                        base_col_name = "Total Custom Base"
-                        base_mask = (df_ct_work[base_cols].notna() & (df_ct_work[base_cols] != 0)).any(axis=1)
-                        
-                        df_ct_work = df_ct_work[base_mask].copy()
-                        df_ct_work = df_ct_work.assign(**{base_col_name: np.ones(len(df_ct_work), dtype='int8')})
-                    else:
-                        base_col_name = "Total Population"
-                        df_ct_work = df_ct_work.assign(**{base_col_name: np.ones(len(df_ct_work), dtype='int8')})
+                    # Set standard base column logic automatically
+                    base_col_name = "Total Population"
+                    df_ct_work = df_ct_work.assign(**{base_col_name: np.ones(len(df_ct_work), dtype='int8')})
 
                     ct_cols = [base_col_name] + list(dict.fromkeys([x for x in raw_ct_cols if x]))
 
@@ -795,7 +774,7 @@ if uploaded_file:
                             ["CROSSTAB TITLE : Universal Crosstabs"], 
                             ["STUDY NAME : Advanced Market Mapper"], 
                             ["SELECTED BASE : Dynamic Question-Level Auto-Base (N sizes automatically adjust to exclude skipped respondents)"], 
-                            [f"WEIGHT TYPE : {'Custom Universe Base (Filtered Respondents)' if (use_custom_base and base_cols) else 'Weighted Population'}"]
+                            ["WEIGHT TYPE : Weighted Population"]
                         ]).to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
                         
                         df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
