@@ -273,9 +273,6 @@ def load_and_prep_data(file):
             v_name = VARIETIES.get(variety_code, f"Variety {variety_code}")
             add_var(f"[Q8 Sub-Brand] {b_name} - {v_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), q8_mask)
 
-    # -------------------------------------------------------------
-    # BRAND-SPECIFIC MATRIX LOGIC
-    # -------------------------------------------------------------
     brand_masks = {}
     for b_idx in BRANDS.keys():
         b_cols = [f"Q2_r{c}_c{b_idx}" for c in CHANNELS.keys()] + \
@@ -314,7 +311,7 @@ def load_and_prep_data(file):
             for r_idx, r_name in REASONS.items(): add_var(f"[Q14 Reason] {r_name} - {b_name}", (s_num == r_idx).astype(int), brand_masks[b_idx])
 
     # -------------------------------------------------------------
-    # BRAND-AGNOSTIC AGGREGATORS
+    # BRAND-AGNOSTIC AGGREGATORS (THE "ANY BRAND" FIX)
     # -------------------------------------------------------------
     for c_idx, c_name in CHANNELS.items():
         cols = [f"Q2_r{c_idx}_c{b_idx}" for b_idx in BRANDS.keys() if f"Q2_r{c_idx}_c{b_idx}" in df.columns]
@@ -662,7 +659,31 @@ if uploaded_file:
         use_custom_base = st.checkbox("Enable Custom Universe Base", key="use_custom_base")
         base_cols = []
         if use_custom_base:
-            base_cols = render_checkbox_search("base_cols", "Variables to Define Base", all_vars_for_selection)
+            base_search_all = render_checkbox_search("base_cols", "Variables to Define Base", all_vars_for_selection)
+            
+            with st.expander("📂 Or Browse by Category (Base)", expanded=False):
+                b_col1, b_col2, b_col3, b_col4 = st.columns(4)
+                with b_col1: base_demos = st.multiselect("Demographics", CAT_DEMOS, key="b_demo")
+                with b_col2: base_cats = st.multiselect("Beverage Categories", CAT_CATEGORIES, key="b_cats")
+                with b_col3: base_brands = st.multiselect("Brands & Products", CAT_BRANDS, key="b_brand")
+                with b_col4: base_psycho = st.multiselect("Attitudes & Psychographics", CAT_ATTITUDES, key="b_psycho")
+                
+                ex_b1, ex_b2, ex_b3, ex_b4 = st.columns(4)
+                with ex_b1: base_buy = st.multiselect("Buying Styles", CAT_BUYING, key="b_buy")
+                with ex_b2: base_favs = st.multiselect("Rejectors & Favs", CAT_FAVS, key="b_favs")
+                with ex_b3: base_chan = st.multiselect("Channels & Occasions", CAT_CHANNELS, key="b_chan")
+                with ex_b4: base_reas = st.multiselect("Drivers & Perceptions", CAT_REASONS + CAT_PERCEPTIONS, key="b_reas")
+                
+                ex_b5, ex_b6, ex_b7 = st.columns(3)
+                with ex_b5: base_agg = st.multiselect("Brand-Agnostic Aggregates", CAT_AGGREGATES, key="b_agg")
+                with ex_b6: base_defs = st.multiselect("Saved Definitions", st.session_state['created_definitions'], key="b_defs")
+                with ex_b7: 
+                    if CAT_RAW: base_raw = st.multiselect("Raw Variables", CAT_RAW, key="b_raw")
+                    else: base_raw = []
+
+            base_cols = base_search_all + base_demos + base_cats + base_brands + base_psycho + base_buy + base_favs + base_chan + base_reas + base_agg + base_defs + base_raw
+            base_cols = list(dict.fromkeys([x for x in base_cols if x]))
+
             if base_cols:
                 person_mask = (st.session_state['df_working'][base_cols].notna() & (st.session_state['df_working'][base_cols] != 0)).any(axis=1)
                 unweighted_people = person_mask.sum()
