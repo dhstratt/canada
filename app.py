@@ -613,7 +613,7 @@ if uploaded_file:
 
         st.markdown("---")
         st.markdown("### 🥞 Dynamic Data Stacking (Optional)")
-        st.markdown("Use this to match 'Event Level' or 'Brand Level' banner books. Selected variables will be melted so that Total Population = Total Events instead of Total People.")
+        st.markdown("Use this to match stacked banner books. Selected variables will be melted, but the math engine will deduplicate respondents so that **Total Population = Total Unique People** (matching your banner book logic).")
         
         use_stacking = st.checkbox("Enable Dynamic Stacking", key="use_stacking")
         stack_cols = []
@@ -820,7 +820,7 @@ if uploaded_file:
                     ["CROSSTAB TITLE : Universal Crosstabs"], 
                     ["STUDY NAME : Advanced Market Mapper"], 
                     ["SELECTED BASE : Dynamic Question-Level Auto-Base (N sizes automatically adjust to exclude skipped respondents)"], 
-                    [f"WEIGHT TYPE : {'Stacked / Event Level' if (use_stacking and stack_cols) else 'Weighted Population'}"]
+                    [f"WEIGHT TYPE : {'Stacked / Unique Respondent Base' if (use_stacking and stack_cols) else 'Weighted Population'}"]
                 ]).to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
                 
                 df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
