@@ -91,17 +91,20 @@ SCALE_OPTIONS = [
 # UI HELPERS
 # =====================================================================
 def add_to_selection(key_prefix, item):
-    """Callback to append items to the cart BEFORE the app re-renders."""
-    if item not in st.session_state[f"{key_prefix}_selections"]:
-        st.session_state[f"{key_prefix}_selections"].append(item)
+    """Callback to append items directly to the multiselect's session state."""
+    ms_key = f"{key_prefix}_ms"
+    if ms_key in st.session_state:
+        if item not in st.session_state[ms_key]:
+            st.session_state[ms_key] = st.session_state[ms_key] + [item]
 
 def render_checkbox_search(key_prefix, label, options, default_selection=None):
     """Renders a dynamic search bar that produces optimized buttons for rapid multi-selection."""
-    if f"{key_prefix}_selections" not in st.session_state:
-        st.session_state[f"{key_prefix}_selections"] = default_selection if default_selection else []
+    ms_key = f"{key_prefix}_ms"
+    
+    if ms_key not in st.session_state:
+        st.session_state[ms_key] = default_selection if default_selection else []
         
-    selected = st.multiselect(f"🛒 **{label}:**", options, default=st.session_state[f"{key_prefix}_selections"], key=f"{key_prefix}_ms")
-    st.session_state[f"{key_prefix}_selections"] = selected
+    selected = st.multiselect(f"🛒 **{label}:**", options, key=ms_key)
     
     search_query = st.text_input(f"🔍 Search {label} (Click ➕ to add):", key=f"{key_prefix}_search")
     
@@ -123,7 +126,7 @@ def render_checkbox_search(key_prefix, label, options, default_selection=None):
         else:
             st.caption("No new matches found.")
             
-    return st.session_state[f"{key_prefix}_selections"]
+    return selected
 
 # =====================================================================
 # SCALE MASK EVALUATION ENGINE
@@ -611,7 +614,6 @@ if uploaded_file:
             if stack_cols:
                 st.info(f"Will stack {len(stack_cols)} variables. Unselected demographic and psychographic variables will be duplicated for each stacked event.")
                 
-                # Dynamic Preview for Stacked Event Base
                 preview_df = st.session_state['df_working'][['Weight'] + stack_cols]
                 preview_melted = pd.melt(preview_df, id_vars=['Weight'], value_vars=stack_cols, value_name="Stacked_Match")
                 valid_preview = preview_melted["Stacked_Match"].notna() & (preview_melted["Stacked_Match"] != 0)
