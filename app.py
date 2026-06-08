@@ -48,7 +48,6 @@ PSYCHOGRAPHICS = {
 ETHNICITIES = {1: "Asian", 2: "Arab", 3: "Black", 4: "Caucasian/White", 5: "Latin American", 6: "Jewish", 7: "Indigenous Peoples", 8: "Other", 9: "Do not wish to reply"}
 
 DEMO_MAP = {
-    # Mapped directly to LangQuota for accurate French/English parsing
     "LangQuota": {1: "Language: French", 2: "Language: English", "EN": "Language: English", "FR": "Language: French", "English": "Language: English", "French": "Language: French", "1.0": "Language: French", "2.0": "Language: English"}, 
     "S2": {1: "Province: AB", 2: "Province: BC", 3: "Province: MB", 4: "Province: NB", 5: "Province: NL", 7: "Province: NS", 8: "Province: NU", 9: "Province: ON", 10: "Province: PEI", 11: "Province: QC", 12: "Province: SK", 13: "Province: YT"},
     "S3": {2: "Age: 18-24", 3: "Age: 25-34", 4: "Age: 35-44", 5: "Age: 45-54", 6: "Age: 55-65"},
@@ -274,6 +273,9 @@ def load_and_prep_data(file):
             v_name = VARIETIES.get(variety_code, f"Variety {variety_code}")
             add_var(f"[Q8 Sub-Brand] {b_name} - {v_name}", pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int), q8_mask)
 
+    # -------------------------------------------------------------
+    # BRAND-SPECIFIC MATRIX LOGIC
+    # -------------------------------------------------------------
     brand_masks = {}
     for b_idx in BRANDS.keys():
         b_cols = [f"Q2_r{c}_c{b_idx}" for c in CHANNELS.keys()] + \
@@ -310,6 +312,43 @@ def load_and_prep_data(file):
         if f"Q14_c{b_idx}" in df.columns:
             s_num = pd.to_numeric(df[f"Q14_c{b_idx}"], errors='coerce')
             for r_idx, r_name in REASONS.items(): add_var(f"[Q14 Reason] {r_name} - {b_name}", (s_num == r_idx).astype(int), brand_masks[b_idx])
+
+    # -------------------------------------------------------------
+    # BRAND-AGNOSTIC AGGREGATORS
+    # -------------------------------------------------------------
+    for c_idx, c_name in CHANNELS.items():
+        cols = [f"Q2_r{c_idx}_c{b_idx}" for b_idx in BRANDS.keys() if f"Q2_r{c_idx}_c{b_idx}" in df.columns]
+        if cols: add_var(f"[Q2 Channel] AGGREGATE: {c_name}", (df[cols].apply(pd.to_numeric, errors='coerce').fillna(0) > 0).any(axis=1).astype(int), get_block_valid_mask(cols))
+        
+    for s_idx, s_name in SIZES.items():
+        cols = [f"Q3_r{s_idx}_c{b_idx}" for b_idx in BRANDS.keys() if f"Q3_r{s_idx}_c{b_idx}" in df.columns]
+        if cols: add_var(f"[Q3 Size] AGGREGATE: {s_name}", (df[cols].apply(pd.to_numeric, errors='coerce').fillna(0) > 0).any(axis=1).astype(int), get_block_valid_mask(cols))
+        
+    for w_idx, w_name in WHY_CHOOSE.items():
+        cols = [f"Q6_{w_idx}.{b_idx}" for b_idx in BRANDS.keys() if f"Q6_{w_idx}.{b_idx}" in df.columns]
+        if cols: add_var(f"[Q6 Why Choose] AGGREGATE: {w_name}", (df[cols].apply(pd.to_numeric, errors='coerce').fillna(0) > 0).any(axis=1).astype(int), get_block_valid_mask(cols))
+        
+    for w_idx, w_name in WHO_DRINKS.items():
+        cols = [f"Q9_r{w_idx}_c{b_idx}" for b_idx in BRANDS.keys() if f"Q9_r{w_idx}_c{b_idx}" in df.columns]
+        if cols: add_var(f"[Q9 Who Drinks] AGGREGATE: {w_name}", (df[cols].apply(pd.to_numeric, errors='coerce').fillna(0) > 0).any(axis=1).astype(int), get_block_valid_mask(cols))
+        
+    for w_idx, w_name in WHEN_HOW.items():
+        cols = [f"Q9a_r{w_idx}_c{b_idx}" for b_idx in BRANDS.keys() if f"Q9a_r{w_idx}_c{b_idx}" in df.columns]
+        if cols: add_var(f"[Q9a When/How] AGGREGATE: {w_name}", (df[cols].apply(pd.to_numeric, errors='coerce').fillna(0) > 0).any(axis=1).astype(int), get_block_valid_mask(cols))
+        
+    for f_idx, f_name in FREQUENCY.items():
+        cols = [f"Q9b_c{b_idx}" for b_idx in BRANDS.keys() if f"Q9b_c{b_idx}" in df.columns]
+        if cols:
+            agg_mask = pd.Series(False, index=df.index)
+            for c in cols: agg_mask = agg_mask | (pd.to_numeric(df[c], errors='coerce') == f_idx)
+            add_var(f"[Q9b Frequency] AGGREGATE: {f_name}", agg_mask.astype(int), get_block_valid_mask(cols))
+            
+    for r_idx, r_name in REASONS.items():
+        cols = [f"Q14_c{b_idx}" for b_idx in BRANDS.keys() if f"Q14_c{b_idx}" in df.columns]
+        if cols:
+            agg_mask = pd.Series(False, index=df.index)
+            for c in cols: agg_mask = agg_mask | (pd.to_numeric(df[c], errors='coerce') == r_idx)
+            add_var(f"[Q14 Reason] AGGREGATE: {r_name}", agg_mask.astype(int), get_block_valid_mask(cols))
 
     q5a_mask = get_block_valid_mask([c for c in df.columns if c.startswith('Q5a')])
     if q5a_mask.any():
@@ -417,10 +456,11 @@ if uploaded_file:
     all_vars_for_selection = all_cols + st.session_state['created_definitions']
     
     CAT_DEMOS, CAT_CATEGORIES, CAT_BRANDS, CAT_BUYING, CAT_FAVS = [], [], [], [], []
-    CAT_CHANNELS, CAT_REASONS, CAT_ATTITUDES, CAT_PERCEPTIONS, CAT_RAW = [], [], [], [], []
+    CAT_CHANNELS, CAT_REASONS, CAT_ATTITUDES, CAT_PERCEPTIONS, CAT_RAW, CAT_AGGREGATES = [], [], [], [], [], []
     
     for c in all_cols:
-        if "Demo]" in c: CAT_DEMOS.append(c)
+        if "AGGREGATE:" in c: CAT_AGGREGATES.append(c)
+        elif "Demo]" in c: CAT_DEMOS.append(c)
         elif "Category]" in c: CAT_CATEGORIES.append(c)
         elif "Brand]" in c or "Size]" in c or "Sub-Brand]" in c: CAT_BRANDS.append(c)
         elif "Buying Styles]" in c: CAT_BUYING.append(c)
@@ -645,11 +685,15 @@ if uploaded_file:
             with ex_c2: col_favs = st.multiselect("Rejectors & Favs", CAT_FAVS, key="c_favs")
             with ex_c3: col_chan = st.multiselect("Channels & Occasions", CAT_CHANNELS, key="c_chan")
             with ex_c4: col_reas = st.multiselect("Drivers & Perceptions", CAT_REASONS + CAT_PERCEPTIONS, key="c_reas")
-            col_defs = st.multiselect("Saved Definitions", st.session_state['created_definitions'], key="c_defs")
-            if CAT_RAW: col_raw = st.multiselect("Raw Variables", CAT_RAW, key="c_raw")
-            else: col_raw = []
+            
+            ex_c5, ex_c6, ex_c7 = st.columns(3)
+            with ex_c5: col_agg = st.multiselect("Brand-Agnostic Aggregates", CAT_AGGREGATES, key="c_agg")
+            with ex_c6: col_defs = st.multiselect("Saved Definitions", st.session_state['created_definitions'], key="c_defs")
+            with ex_c7: 
+                if CAT_RAW: col_raw = st.multiselect("Raw Variables", CAT_RAW, key="c_raw")
+                else: col_raw = []
 
-        raw_ct_cols = col_search_all + col_demos + col_cats + col_brands + col_psycho + col_buy + col_favs + col_chan + col_reas + col_defs + col_raw
+        raw_ct_cols = col_search_all + col_demos + col_cats + col_brands + col_psycho + col_buy + col_favs + col_chan + col_reas + col_agg + col_defs + col_raw
         
         st.markdown("---")
         st.markdown("### Rows")
@@ -667,11 +711,15 @@ if uploaded_file:
             with ex_r2: row_favs = st.multiselect("Rejectors & Favs ", CAT_FAVS, key="r_favs")
             with ex_r3: row_chan = st.multiselect("Channels & Occasions ", CAT_CHANNELS, key="r_chan")
             with ex_r4: row_reas = st.multiselect("Drivers & Perceptions ", CAT_REASONS + CAT_PERCEPTIONS, key="r_reas")
-            row_defs = st.multiselect("Saved Definitions ", st.session_state['created_definitions'], key="r_defs")
-            if CAT_RAW: row_raw = st.multiselect("Raw Variables ", CAT_RAW, key="r_raw")
-            else: row_raw = []
+            
+            ex_r5, ex_r6, ex_r7 = st.columns(3)
+            with ex_r5: row_agg = st.multiselect("Brand-Agnostic Aggregates ", CAT_AGGREGATES, key="r_agg")
+            with ex_r6: row_defs = st.multiselect("Saved Definitions ", st.session_state['created_definitions'], key="r_defs")
+            with ex_r7:
+                if CAT_RAW: row_raw = st.multiselect("Raw Variables ", CAT_RAW, key="r_raw")
+                else: row_raw = []
 
-        raw_ct_rows = row_search_all + row_demos + row_cats + row_brands + row_psycho + row_buy + row_favs + row_chan + row_reas + row_defs + row_raw
+        raw_ct_rows = row_search_all + row_demos + row_cats + row_brands + row_psycho + row_buy + row_favs + row_chan + row_reas + row_agg + row_defs + row_raw
         ct_rows = list(dict.fromkeys([x for x in raw_ct_rows if x]))
         
         if ct_rows and (raw_ct_cols or st.session_state['created_definitions']):
