@@ -48,7 +48,7 @@ PSYCHOGRAPHICS = {
 ETHNICITIES = {1: "Asian", 2: "Arab", 3: "Black", 4: "Caucasian/White", 5: "Latin American", 6: "Jewish", 7: "Indigenous Peoples", 8: "Other", 9: "Do not wish to reply"}
 
 DEMO_MAP = {
-    "S1": {1: "Language: French", 2: "Language: English"},
+    "S1": {1: "Language: English", 2: "Language: French"}, 
     "S2": {1: "Province: AB", 2: "Province: BC", 3: "Province: MB", 4: "Province: NB", 5: "Province: NL", 7: "Province: NS", 8: "Province: NU", 9: "Province: ON", 10: "Province: PEI", 11: "Province: QC", 12: "Province: SK", 13: "Province: YT"},
     "S3": {2: "Age: 18-24", 3: "Age: 25-34", 4: "Age: 35-44", 5: "Age: 45-54", 6: "Age: 55-65"},
     "S4": {1: "Kids in HH: Yes", 2: "Kids in HH: No"},
@@ -171,6 +171,7 @@ def load_and_prep_data(file):
     
     weight_col = next((c for c in df.columns if c.lower() == 'weight'), None)
     
+    # MEMORY OPTIMIZATION: Use float32 instead of float64 for weights
     if weight_col: 
         df_clean['Weight'] = pd.to_numeric(df[weight_col], errors='coerce').fillna(1.0).astype('float32')
         df_valid['Weight'] = df_clean['Weight']
@@ -178,6 +179,7 @@ def load_and_prep_data(file):
         df_clean['Weight'] = np.float32(1.0)
         df_valid['Weight'] = np.float32(1.0)
 
+    # MEMORY OPTIMIZATION: Downcast integer flags to int8
     def add_var(name, val_series, valid_mask):
         df_clean[name] = val_series.astype('int8')
         df_valid[name] = valid_mask.astype('int8')
