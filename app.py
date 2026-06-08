@@ -122,11 +122,9 @@ def load_and_prep_data(file):
     if file.name.endswith('.csv'): df = pd.read_csv(file)
     else: df = pd.read_excel(file)
         
-    # FIX: Initialize clean structures with standard dataframe tracking index
     df_clean = pd.DataFrame(index=df.index)
     df_valid = pd.DataFrame(index=df.index)
     
-    # Defensive check for case-insensitive weight column setup
     weight_col = next((c for c in df.columns if c.lower() == 'weight'), None)
     
     if weight_col: 
@@ -340,10 +338,17 @@ if uploaded_file:
                 else:
                     st.session_state['df_valid'] = workspace['df_valid']
                     
-                st.session_state['created_segments'] = workspace['created_segments']
+                # Backwards compatibility check for older segment workspaces
+                if 'created_definitions' in workspace:
+                    st.session_state['created_definitions'] = workspace['created_definitions']
+                elif 'created_segments' in workspace:
+                    st.session_state['created_definitions'] = workspace['created_segments']
+                else:
+                    st.session_state['created_definitions'] = []
+                    
                 st.session_state['data_loaded'] = True
                 st.session_state['file_name'] = uploaded_file.name
-            st.sidebar.success(f"Workspace Restored! Loaded {len(st.session_state['created_segments'])} Custom Segments.")
+            st.sidebar.success(f"Workspace Restored! Loaded {len(st.session_state['created_definitions'])} Custom Definitions.")
         else:
             df_base, df_valid_base = load_and_prep_data(uploaded_file)
             
@@ -355,13 +360,13 @@ if uploaded_file:
             if 'data_loaded' not in st.session_state or st.session_state.get('file_name') != uploaded_file.name or is_legacy_state:
                 st.session_state['df_working'] = df_base.copy()
                 st.session_state['df_valid'] = df_valid_base.copy()
-                st.session_state['created_segments'] = []
+                st.session_state['created_definitions'] = []
                 st.session_state['data_loaded'] = True
                 st.session_state['file_name'] = uploaded_file.name
             st.sidebar.success(f"Loaded Master File: {len(df_base)} Respondents!")
     
-    all_cols = [c for c in st.session_state['df_working'].columns if c != "Weight" and c not in st.session_state['created_segments']]
-    all_vars_for_selection = all_cols + st.session_state['created_segments']
+    all_cols = [c for c in st.session_state['df_working'].columns if c != "Weight" and c not in st.session_state['created_definitions']]
+    all_vars_for_selection = all_cols + st.session_state['created_definitions']
     
     CAT_DEMOS = [c for c in all_cols if "Demo]" in c]
     CAT_CATEGORIES = [c for c in all_cols if "Category]" in c]
@@ -374,23 +379,23 @@ if uploaded_file:
     CAT_PERCEPTIONS = [c for c in all_cols if "Brand Attitude]" in c]
     CAT_RAW = [c for c in all_cols if "Raw]" in c]
     
-    if st.session_state['created_segments']:
+    if st.session_state['created_definitions']:
         st.sidebar.markdown("---")
-        st.sidebar.subheader("💾 Stored Segments")
-        for seg in st.session_state['created_segments']:
+        st.sidebar.subheader("💾 Stored Definitions")
+        for def_name in st.session_state['created_definitions']:
             col_name, col_del = st.sidebar.columns([4, 1])
-            col_name.markdown(f"`{seg}`")
-            if col_del.button("❌", key=f"del_{seg}"):
-                st.session_state['df_working'] = st.session_state['df_working'].drop(columns=[seg])
-                st.session_state['df_valid'] = st.session_state['df_valid'].drop(columns=[seg])
-                st.session_state['created_segments'].remove(seg)
+            col_name.markdown(f"`{def_name}`")
+            if col_del.button("❌", key=f"del_{def_name}"):
+                st.session_state['df_working'] = st.session_state['df_working'].drop(columns=[def_name])
+                st.session_state['df_valid'] = st.session_state['df_valid'].drop(columns=[def_name])
+                st.session_state['created_definitions'].remove(def_name)
                 st.rerun()
                 
         st.sidebar.markdown("---")
-        if st.sidebar.button("🗑️ Clear All Segments", type="secondary"):
-            st.session_state['df_working'] = st.session_state['df_working'].drop(columns=st.session_state['created_segments'])
-            st.session_state['df_valid'] = st.session_state['df_valid'].drop(columns=st.session_state['created_segments'])
-            st.session_state['created_segments'] = []
+        if st.sidebar.button("🗑️ Clear All Definitions", type="secondary"):
+            st.session_state['df_working'] = st.session_state['df_working'].drop(columns=st.session_state['created_definitions'])
+            st.session_state['df_valid'] = st.session_state['df_valid'].drop(columns=st.session_state['created_definitions'])
+            st.session_state['created_definitions'] = []
             st.rerun()
 
     st.sidebar.markdown("---")
@@ -398,9 +403,9 @@ if uploaded_file:
     workspace_export = {
         'df_working': st.session_state['df_working'],
         'df_valid': st.session_state['df_valid'],
-        'created_segments': st.session_state['created_segments']
+        'created_definitions': st.session_state['created_definitions']
     }
-    st.sidebar.download_button("💾 Download Workspace (.pkl)", data=pickle.dumps(workspace_export), file_name="my_segment_workspace.pkl", mime="application/octet-stream")
+    st.sidebar.download_button("💾 Download Workspace (.pkl)", data=pickle.dumps(workspace_export), file_name="my_definition_workspace.pkl", mime="application/octet-stream")
     
     st.sidebar.markdown("---")
     if st.sidebar.button("🔄 Hard Reset App", type="secondary"):
@@ -410,13 +415,13 @@ if uploaded_file:
     # =====================================================================
     # MAIN WORKSPACE TABS
     # =====================================================================
-    tab1, tab2, tab3 = st.tabs(["🛠️ Segment Builder & Sizing", "📊 Universal Crosstabs", "🗺️ Landscape Map"])
+    tab1, tab2, tab3 = st.tabs(["🛠️ Definition Builder & Sizing", "📊 Universal Crosstabs", "🗺️ Landscape Map"])
     
     # -------------------------------------------------------------
-    # TAB 1: SEGMENT BUILDER & SIZING
+    # TAB 1: DEFINITION BUILDER & SIZING
     # -------------------------------------------------------------
     with tab1:
-        st.subheader("Create a Custom Segment")
+        st.subheader("Create a Custom Definition")
         col_pool, col_mand = st.columns(2)
         with col_pool:
             st.markdown("### A. Threshold Statement Pool")
@@ -491,35 +496,35 @@ if uploaded_file:
             st.success(f"📊 **Dynamic Preview:** This configuration currently captures **{raw_match:,}** respondents ({(weighted_match/total_weighted)*100:.1f}% of total market).")
             
             with col_save:
-                segment_name = st.text_input("Name your Segment:", value="New Segment 1")
-                if st.button("💾 Save Segment to Workspace", type="primary"):
-                    if segment_name in st.session_state['created_segments'] or segment_name in all_cols: st.error("A segment with this name already exists.")
+                def_name = st.text_input("Name your Definition:", value="New Definition 1")
+                if st.button("💾 Save Definition to Workspace", type="primary"):
+                    if def_name in st.session_state['created_definitions'] or def_name in all_cols: st.error("A definition with this name already exists.")
                     else:
-                        st.session_state['df_working'][segment_name] = temp_segment
-                        st.session_state['df_valid'][segment_name] = seg_valid_base.astype(int)
-                        st.session_state['created_segments'].append(segment_name)
+                        st.session_state['df_working'][def_name] = temp_segment
+                        st.session_state['df_valid'][def_name] = seg_valid_base.astype(int)
+                        st.session_state['created_definitions'].append(def_name)
                         st.rerun()
 
         st.markdown("---")
-        st.subheader("📏 Saved Segments Sizing")
-        if st.session_state['created_segments']:
+        st.subheader("📏 Saved Definitions Sizing")
+        if st.session_state['created_definitions']:
             sizing_data = []
             total_pop = st.session_state['df_working']['Weight'].sum()
-            metric_cols = st.columns(min(len(st.session_state['created_segments']), 4))
+            metric_cols = st.columns(min(len(st.session_state['created_definitions']), 4))
             
-            for i, seg in enumerate(st.session_state['created_segments']):
+            for i, seg in enumerate(st.session_state['created_definitions']):
                 seg_wgt = st.session_state['df_working'][st.session_state['df_working'][seg] == 1]['Weight'].sum()
                 seg_unw = len(st.session_state['df_working'][st.session_state['df_working'][seg] == 1])
                 market_share = (seg_wgt / total_pop) if total_pop > 0 else 0
                 
                 with metric_cols[i % 4]:
-                    st.metric(label=f"🎯 {seg}", value=f"{int(seg_wgt):,}", delta=f"{market_share * 100:.1f}% Market Share", delta_color="off")
-                sizing_data.append({"Segment Name": seg, "Unweighted Count": seg_unw, "Weighted Count": int(seg_wgt), "Market Share (%)": market_share})
+                    st.metric(label=f"🎯 {seg}", value=f"{int(seg_wgt):,}", delta=f"{market_share * 100:.1f}% of Base", delta_color="off")
+                sizing_data.append({"Definition Name": seg, "Unweighted Count": seg_unw, "Weighted Count": int(seg_wgt), "% of Base": market_share})
             
             st.markdown("<br>", unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame(sizing_data).style.format({"Market Share (%)": "{:.1%}", "Unweighted Count": "{:,}", "Weighted Count": "{:,}"}), use_container_width=True)
+            st.dataframe(pd.DataFrame(sizing_data).style.format({"% of Base": "{:.1%}", "Unweighted Count": "{:,}", "Weighted Count": "{:,}"}), use_container_width=True)
         else:
-            st.info("No segments have been created yet. Build and save a segment above to see its sizing here.")
+            st.info("No definitions have been created yet. Build and save a definition above to see its sizing here.")
 
     # -------------------------------------------------------------
     # TAB 2: UNIVERSAL CROSSTABS
@@ -529,12 +534,14 @@ if uploaded_file:
         with st.expander("⚡ Quick Combiner (AND / OR Logic)", expanded=False):
             st.markdown("Instantly combine variables to use in your crosstabs without leaving this tab. *(Note: Any 1-4 scale Attitudes selected here will automatically be evaluated as 'Any Agree').*")
             qc_cols = st.columns([3, 1, 2])
-            with qc_cols[0]: qc_vars = st.multiselect("Select Variables to Combine:", all_cols, key="qc_vars")
+            
+            # Using all_vars_for_selection to allow combining existing Saved Definitions
+            with qc_cols[0]: qc_vars = st.multiselect("Select Variables to Combine:", all_vars_for_selection, key="qc_vars")
             with qc_cols[1]: qc_logic = st.radio("Combine Using:", ["AND (Must meet ALL)", "OR (Must meet ANY)"], key="qc_logic")
             with qc_cols[2]:
                 qc_name = st.text_input("Name this Combination:", "New Combined Var", key="qc_name")
                 if st.button("➕ Add to Crosstab Buckets", use_container_width=True):
-                    if qc_name in st.session_state['created_segments'] or qc_name in all_cols: st.error("Name already exists!")
+                    if qc_name in st.session_state['created_definitions'] or qc_name in all_cols: st.error("Name already exists!")
                     elif len(qc_vars) < 2: st.warning("Please select at least 2 variables to combine.")
                     else:
                         qc_mask = pd.Series(True, index=st.session_state['df_working'].index) if "AND" in qc_logic else pd.Series(False, index=st.session_state['df_working'].index)
@@ -553,12 +560,23 @@ if uploaded_file:
                                 
                         st.session_state['df_working'][qc_name] = qc_mask.astype(int)
                         st.session_state['df_valid'][qc_name] = qc_valid_base.astype(int)
-                        st.session_state['created_segments'].append(qc_name)
-                        st.success(f"✅ {qc_name} added to Saved Segments!")
+                        st.session_state['created_definitions'].append(qc_name)
+                        st.success(f"✅ {qc_name} added to Saved Definitions!")
                         st.rerun()
 
         st.markdown("---")
-        st.markdown("### ⬇️ 1. Select Columns (Banners)")
+        st.markdown("### 🥞 Dynamic Data Stacking (Optional)")
+        st.markdown("Use this to match 'Event Level' or 'Brand Level' banner books. Selected variables will be melted so that Total Population = Total Events instead of Total People.")
+        
+        use_stacking = st.checkbox("Enable Dynamic Stacking", key="use_stacking")
+        stack_cols = []
+        if use_stacking:
+            stack_cols = st.multiselect("Select variables to stack (e.g., select all Brands or Occasions):", all_vars_for_selection, key="stack_cols")
+            if stack_cols:
+                st.info(f"Will stack {len(stack_cols)} variables. Unselected demographic and psychographic variables will be duplicated for each stacked event.")
+
+        st.markdown("---")
+        st.markdown("### Columns")
         col_search_all = st.multiselect("🔍 Universal Search (Type a keyword, brand, or Q-number):", all_vars_for_selection, key="c_search_all")
         
         with st.expander("📂 Or Browse by Category (Columns)", expanded=False):
@@ -573,18 +591,14 @@ if uploaded_file:
             with ex_c2: col_favs = st.multiselect("Rejectors & Favs", CAT_FAVS, key="c_favs")
             with ex_c3: col_chan = st.multiselect("Channels & Occasions", CAT_CHANNELS, key="c_chan")
             with ex_c4: col_reas = st.multiselect("Drivers & Perceptions", CAT_REASONS + CAT_PERCEPTIONS, key="c_reas")
-            col_segs = st.multiselect("Saved Segments", st.session_state['created_segments'], default=st.session_state['created_segments'], key="c_segs")
+            col_defs = st.multiselect("Saved Definitions", st.session_state['created_definitions'], default=st.session_state['created_definitions'], key="c_defs")
             if CAT_RAW: col_raw = st.multiselect("Raw Variables", CAT_RAW, key="c_raw")
             else: col_raw = []
 
-        raw_ct_cols = col_search_all + col_demos + col_cats + col_brands + col_psycho + col_buy + col_favs + col_chan + col_reas + col_segs + col_raw
-        
-        st.session_state['df_working']['Total Population'] = 1
-        st.session_state['df_valid']['Total Population'] = 1
-        ct_cols = ["Total Population"] + list(dict.fromkeys([x for x in raw_ct_cols if x]))
+        raw_ct_cols = col_search_all + col_demos + col_cats + col_brands + col_psycho + col_buy + col_favs + col_chan + col_reas + col_defs + col_raw
         
         st.markdown("---")
-        st.markdown("### ➡️ 2. Select Rows (Stubs)")
+        st.markdown("### Rows")
         row_search_all = st.multiselect("🔍 Universal Search (Type a keyword, brand, or Q-number):", all_vars_for_selection, key="r_search_all")
         
         with st.expander("📂 Or Browse by Category (Rows)", expanded=False):
@@ -599,14 +613,41 @@ if uploaded_file:
             with ex_r2: row_favs = st.multiselect("Rejectors & Favs ", CAT_FAVS, key="r_favs")
             with ex_r3: row_chan = st.multiselect("Channels & Occasions ", CAT_CHANNELS, key="r_chan")
             with ex_r4: row_reas = st.multiselect("Drivers & Perceptions ", CAT_REASONS + CAT_PERCEPTIONS, key="r_reas")
-            row_segs = st.multiselect("Saved Segments ", st.session_state['created_segments'], key="r_segs")
+            row_defs = st.multiselect("Saved Definitions ", st.session_state['created_definitions'], key="r_defs")
             if CAT_RAW: row_raw = st.multiselect("Raw Variables ", CAT_RAW, key="r_raw")
             else: row_raw = []
 
-        raw_ct_rows = row_search_all + row_demos + row_cats + row_brands + row_psycho + row_buy + row_favs + row_chan + row_reas + row_segs + row_raw
+        raw_ct_rows = row_search_all + row_demos + row_cats + row_brands + row_psycho + row_buy + row_favs + row_chan + row_reas + row_defs + row_raw
         ct_rows = list(dict.fromkeys([x for x in raw_ct_rows if x]))
         
-        if ct_rows and ct_cols:
+        if ct_rows and (raw_ct_cols or st.session_state['created_definitions']):
+            
+            # ==========================================
+            # DYNAMIC STACKING INTERCEPTOR
+            # ==========================================
+            df_ct_work = st.session_state['df_working'].copy()
+            df_ct_valid = st.session_state['df_valid'].copy()
+            
+            if use_stacking and stack_cols:
+                id_vars = [c for c in df_ct_work.columns if c not in stack_cols]
+                
+                df_ct_work = pd.melt(df_ct_work, id_vars=id_vars, value_vars=stack_cols, var_name="Stacked_Item", value_name="Stacked_Match")
+                df_ct_valid = pd.melt(df_ct_valid, id_vars=id_vars, value_vars=stack_cols, var_name="Stacked_Item", value_name="Stacked_Match_Valid")
+                
+                valid_rows = df_ct_work["Stacked_Match"].notna() & (df_ct_work["Stacked_Match"] != 0)
+                df_ct_work = df_ct_work[valid_rows].copy()
+                df_ct_valid = df_ct_valid[valid_rows].copy()
+                
+                for sc in stack_cols:
+                    df_ct_work[sc] = (df_ct_work["Stacked_Item"] == sc).astype(int)
+                    df_ct_valid[sc] = 1 
+                    
+            df_ct_work['Total Population'] = 1
+            df_ct_valid['Total Population'] = 1
+            # ==========================================
+
+            ct_cols = ["Total Population"] + list(dict.fromkeys([x for x in raw_ct_cols if x]))
+
             scale_vars_in_ct = [v for v in set(ct_rows + ct_cols) if (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v) or (v == "Total Population")]
             ct_logic_dict = {}
             if scale_vars_in_ct:
@@ -625,20 +666,20 @@ if uploaded_file:
             for c in ct_cols:
                 is_scale = (("Psycho]" in c) and ("Core Value" not in c)) or ("Kids Attitudes]" in c)
                 if c == "Total Population":
-                    col_mask = st.session_state['df_working'][c] == 1
+                    col_mask = df_ct_work[c] == 1
                     c_label = c
                 elif is_scale:
                     logic = ct_logic_dict.get(c, "Any Agree (1 or 2 combined)")
-                    col_mask = get_scale_mask(st.session_state['df_working'], c, logic)
+                    col_mask = get_scale_mask(df_ct_work, c, logic)
                     short_suffix = logic.split(" (")[0]
                     c_label = f"{c} ({short_suffix})"
                 else:
-                    col_mask = st.session_state['df_working'][c] == 1
+                    col_mask = df_ct_work[c] == 1
                     c_label = c
                     
-                col_weighted = st.session_state['df_working'][col_mask]['Weight'].sum()
+                col_weighted = df_ct_work[col_mask]['Weight'].sum()
                 col_baselines[c] = {"mask": col_mask, "label": c_label}
-                universe_row.extend([col_weighted, col_weighted, 1.00, 1.00, 100])
+                universe_row.extend([col_weighted, 1.00, 1.00, 100])
                 
             export_data.append(universe_row)
             
@@ -647,36 +688,36 @@ if uploaded_file:
                 is_scale = (("Psycho]" in r) and ("Core Value" not in r)) or ("Kids Attitudes]" in r)
                 if is_scale:
                     logic = ct_logic_dict.get(r, "Any Agree (1 or 2 combined)")
-                    r_mask = get_scale_mask(st.session_state['df_working'], r, logic)
+                    r_mask = get_scale_mask(df_ct_work, r, logic)
                     short_suffix = logic.split(" (")[0]
                     r_label = f"{r} ({short_suffix})"
                 else:
-                    r_mask = st.session_state['df_working'][r] == 1
+                    r_mask = df_ct_work[r] == 1
                     r_label = r
                     
-                r_valid_mask = st.session_state['df_valid'][r] == 1
-                stmt_weighted = st.session_state['df_working'][r_mask]['Weight'].sum()
-                r_valid_weighted = st.session_state['df_working'][r_valid_mask]['Weight'].sum()
+                r_valid_mask = df_ct_valid[r] == 1
+                stmt_weighted = df_ct_work[r_mask]['Weight'].sum()
+                r_valid_weighted = df_ct_work[r_valid_mask]['Weight'].sum()
                 stmt_vert_pct = (stmt_weighted / r_valid_weighted) if r_valid_weighted > 0 else 0
                 
                 r_data = [r_label]
                 for c in ct_cols:
                     c_mask = col_baselines[c]["mask"]
                     cross_mask = r_mask & c_mask
-                    cross_weighted = st.session_state['df_working'][cross_mask]['Weight'].sum()
+                    cross_weighted = df_ct_work[cross_mask]['Weight'].sum()
                     
                     valid_for_cell_mask = c_mask & r_valid_mask
-                    cell_base_wgt = st.session_state['df_working'][valid_for_cell_mask]['Weight'].sum()
+                    cell_base_wgt = df_ct_work[valid_for_cell_mask]['Weight'].sum()
                     
                     vert_pct = (cross_weighted / cell_base_wgt) if cell_base_wgt > 0 else 0
                     horz_pct = (cross_weighted / stmt_weighted) if stmt_weighted > 0 else 0
                     idx_score = (vert_pct / stmt_vert_pct * 100) if stmt_vert_pct > 0 else 0
                     
-                    r_data.extend([cross_weighted, cell_base_wgt, vert_pct, horz_pct, int(round(idx_score, 0))])
+                    r_data.extend([cross_weighted, vert_pct, horz_pct, int(round(idx_score, 0))])
                 export_data.append(r_data)
             
             preview_headers = ["Statement"]
-            metrics = ["Count", "Base (N)", "Vertical(%)", "Horizontal(%)", "Index"]
+            metrics = ["Count", "Vertical(%)", "Horizontal(%)", "Index"]
             for c in ct_cols:
                 c_display = col_baselines[c]["label"]
                 for m in metrics: preview_headers.append(f"{c_display} - {m}")
@@ -688,7 +729,7 @@ if uploaded_file:
             format_dict = {}
             for col in df_preview.columns:
                 if "Vertical" in col or "Horizontal" in col: format_dict[col] = "{:.1%}" 
-                elif "Count" in col or "Base (N)" in col: format_dict[col] = "{:,.0f}"
+                elif "Count" in col: format_dict[col] = "{:,.0f}"
                 elif "Index" in col: format_dict[col] = "{:.0f}"
             st.dataframe(df_preview.head(10).style.format(format_dict))
             
@@ -696,8 +737,8 @@ if uploaded_file:
             excel_sub_headers = [""]
             for c in ct_cols:
                 c_display = col_baselines[c]["label"]
-                excel_headers.extend([c_display, "", "", "", ""])
-                excel_sub_headers.extend(["Count", "Base (N)", "Vertical(%)", "Horizontal(%)", "Index"])
+                excel_headers.extend([c_display, "", "", ""])
+                excel_sub_headers.extend(["Count", "Vertical(%)", "Horizontal(%)", "Index"])
                 
             df_excel = pd.DataFrame(export_data).set_index(0)
             df_excel.index.name = "Statement"
@@ -709,7 +750,7 @@ if uploaded_file:
                     ["CROSSTAB TITLE : Universal Crosstabs"], 
                     ["STUDY NAME : Advanced Market Mapper"], 
                     ["SELECTED BASE : Dynamic Question-Level Auto-Base (N sizes automatically adjust to exclude skipped respondents)"], 
-                    ["WEIGHT TYPE : Weighted Population"]
+                    [f"WEIGHT TYPE : {'Stacked / Event Level' if (use_stacking and stack_cols) else 'Weighted Population'}"]
                 ]).to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
                 
                 df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
@@ -717,9 +758,9 @@ if uploaded_file:
                 for row in worksheet.iter_rows(min_row=12, max_row=worksheet.max_row):
                     for cell in row:
                         if cell.column == 1: continue  
-                        col_mod = (cell.column - 1) % 5
-                        if col_mod in [3, 4]: cell.number_format = '0.0%'
-                        elif col_mod in [1, 2]: cell.number_format = '#,##0'
+                        col_mod = (cell.column - 1) % 4
+                        if col_mod in [2, 3]: cell.number_format = '0.0%'
+                        elif col_mod == 1: cell.number_format = '#,##0'
                         elif col_mod == 0: cell.number_format = '0'
                             
             output.seek(0)
@@ -731,7 +772,7 @@ if uploaded_file:
     with tab3:
         st.subheader("Competitive Landscape Map")
         map_rows = st.multiselect("Select Core Values (Rows) to map:", CAT_ATTITUDES + CAT_DEMOS, default=CAT_ATTITUDES[:5])
-        map_cols = st.multiselect("Select Columns (Brands/Segments) to map:", CAT_BRANDS + st.session_state['created_segments'], default=CAT_BRANDS[:3])
+        map_cols = st.multiselect("Select Columns (Brands/Segments) to map:", CAT_BRANDS + st.session_state['created_definitions'], default=CAT_BRANDS[:3])
         
         if map_rows and map_cols:
             scale_vars_map = [v for v in set(map_rows + map_cols) if (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v)]
