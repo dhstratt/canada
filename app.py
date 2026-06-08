@@ -110,7 +110,7 @@ def render_checkbox_search(key_prefix, label, options, default_selection=None):
     
     if search_query:
         sq_lower = search_query.lower()
-        selected_set = set(selected)  # MEMORY/SPEED OPTIMIZATION: Set lookup is O(1)
+        selected_set = set(selected)
         matches = [o for o in options if sq_lower in o.lower() and o not in selected_set]
         
         if matches:
@@ -158,12 +158,6 @@ def get_scale_mask(df, var, logic):
         return series == 0
     return pd.Series(False, index=df.index)
 
-def get_unique_wgt(df, mask):
-    """Calculates weight based on unique respondents to prevent stacked event-inflation."""
-    if 'Resp_ID' not in df.columns:
-        return df[mask]['Weight'].sum()
-    return df[mask].drop_duplicates(subset=['Resp_ID'])['Weight'].sum()
-
 # =====================================================================
 # DATA PROCESSING FUNCTIONS (DYNAMIC TRANSLATION ENGINE)
 # =====================================================================
@@ -191,7 +185,6 @@ def load_and_prep_data(file):
         df_valid[name] = valid_mask.astype('int8')
         
     def get_block_valid_mask(cols):
-        # SPEED OPTIMIZATION: Avoid heavy regex replacement
         exist_cols = [c for c in cols if c in df.columns]
         if not exist_cols: return pd.Series(False, index=df.index)
         temp_df = df[exist_cols]
@@ -420,7 +413,6 @@ if uploaded_file:
     all_cols = [c for c in st.session_state['df_working'].columns if c != "Weight" and c not in st.session_state['created_definitions']]
     all_vars_for_selection = all_cols + st.session_state['created_definitions']
     
-    # SPEED OPTIMIZATION: One-pass category categorization instead of 10x list comprehensions
     CAT_DEMOS, CAT_CATEGORIES, CAT_BRANDS, CAT_BUYING, CAT_FAVS = [], [], [], [], []
     CAT_CHANNELS, CAT_REASONS, CAT_ATTITUDES, CAT_PERCEPTIONS, CAT_RAW = [], [], [], [], []
     
@@ -622,22 +614,19 @@ if uploaded_file:
 
         st.markdown("---")
         st.markdown("### 🥞 Dynamic Data Stacking (Optional)")
-        st.markdown("Use this to match banner books structured as Multiple Response Sets. **The math engine will automatically deduplicate respondents so that Total Population = Total Unique People**, accurately calculating your Vertical Percentages and Overlaps.")
+        st.markdown("Use this to group multiple variables (e.g., all brands from Q1) into a single response block. The crosstab will automatically replace 'Total Population' with '**Total Stacked Base**', calculating percentages ONLY against unique people who actually selected options within this group.")
         
         use_stacking = st.checkbox("Enable Dynamic Stacking", key="use_stacking")
         stack_cols = []
         if use_stacking:
             stack_cols = render_checkbox_search("stack_cols", "Variables to Stack", all_vars_for_selection)
             if stack_cols:
-                # Dynamic Preview for Stacked Event Base
-                preview_df = st.session_state['df_working'][['Weight'] + stack_cols]
-                preview_melted = pd.melt(preview_df, id_vars=['Weight'], value_vars=stack_cols, value_name="Stacked_Match")
-                valid_preview = preview_melted["Stacked_Match"].notna() & (preview_melted["Stacked_Match"] != 0)
+                # Preview Engine: Counts unique people via horizontal vectorized check
+                person_mask = (st.session_state['df_working'][stack_cols].notna() & (st.session_state['df_working'][stack_cols] != 0)).any(axis=1)
+                unweighted_people = person_mask.sum()
+                weighted_people = st.session_state['df_working'].loc[person_mask, 'Weight'].sum()
                 
-                unweighted_events = valid_preview.sum()
-                weighted_events = preview_melted.loc[valid_preview, 'Weight'].sum()
-                
-                st.success(f"🥞 **Stacked Base Preview:** {unweighted_events:,.0f} Unweighted Events | **{weighted_events:,.0f} Weighted Events**")
+                st.success(f"🥞 **Total Stacked Base Preview:** {unweighted_people:,.0f} Unweighted Unique People | **{weighted_people:,.0f} Weighted Unique People**")
 
         st.markdown("---")
         st.markdown("### Columns")
@@ -686,87 +675,87 @@ if uploaded_file:
         
         if ct_rows and (raw_ct_cols or st.session_state['created_definitions']):
             st.markdown("---")
-            # OPTIMIZATION: Protect heavy math behind a Calculate Button
             if st.button("📊 Calculate & Generate Crosstab", type="primary"):
-                with st.spinner("Crunching the numbers..."):
+                with st.spinner("Crunching vectors..."):
                     
-                    # ==========================================
-                    # MATH CALCULATOR (Respondent Level Multiple Response)
-                    # ==========================================
-                    df_ct_work = st.session_state['df_working'].copy()
-                    df_ct_valid = st.session_state['df_valid'].copy()
+                    df_ct_work = st.session_state['df_working']
+                    df_ct_valid = st.session_state['df_valid']
                     
-                    df_ct_work['Resp_ID'] = df_ct_work.index
-                    df_ct_valid['Resp_ID'] = df_ct_valid.index
-                    
-                    ct_cols = ["Total Population"] + list(dict.fromkeys([x for x in raw_ct_cols if x]))
-                    
-                    df_ct_work['Total Population'] = 1
-                    df_ct_valid['Total Population'] = 1
-                    # ==========================================
+                    # Set the primary base column dynamically based on user selection
+                    if use_stacking and stack_cols:
+                        base_col_name = "Total Stacked Base"
+                        base_mask = (df_ct_work[stack_cols].notna() & (df_ct_work[stack_cols] != 0)).any(axis=1)
+                        # We temporarily attach this to the working dataframe so the get_scale_mask logic processes it natively
+                        df_ct_work = df_ct_work.assign(**{base_col_name: base_mask.astype('int8')})
+                        df_ct_valid = df_ct_valid.assign(**{base_col_name: np.ones(len(df_ct_valid), dtype='int8')})
+                    else:
+                        base_col_name = "Total Population"
+                        df_ct_work = df_ct_work.assign(**{base_col_name: np.ones(len(df_ct_work), dtype='int8')})
+                        df_ct_valid = df_ct_valid.assign(**{base_col_name: np.ones(len(df_ct_valid), dtype='int8')})
 
-                    scale_vars_in_ct = [v for v in set(ct_rows + ct_cols) if (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v) or (v == "Total Population")]
+                    ct_cols = [base_col_name] + list(dict.fromkeys([x for x in raw_ct_cols if x]))
+
+                    scale_vars_in_ct = [v for v in set(ct_rows + ct_cols) if (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v)]
                     ct_logic_dict = {}
                     if scale_vars_in_ct:
                         with st.expander("⚙️ Fine-Tune Attitude Scales for Rows & Columns (Defaults to Any Agree)", expanded=False):
                             col_rl1, col_rl2 = st.columns(2)
                             for i, v in enumerate(scale_vars_in_ct):
-                                if v == "Total Population": continue
                                 t_col = col_rl1 if i % 2 == 0 else col_rl2
                                 with t_col:
                                     ct_logic_dict[v] = st.selectbox(f"{v[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"ct_logic_all_{v}")
 
                     export_data = []
                     universe_row = ["Column Base (N)"]
-                    col_baselines = {}
+                    col_masks = {}
                     
+                    # Process Column Vectors
                     for c in ct_cols:
                         is_scale = (("Psycho]" in c) and ("Core Value" not in c)) or ("Kids Attitudes]" in c)
-                        if c == "Total Population":
-                            col_mask = df_ct_work[c] == 1
+                        if c == base_col_name:
+                            mask = df_ct_work[c] == 1
                             c_label = c
                         elif is_scale:
                             logic = ct_logic_dict.get(c, "Any Agree (1 or 2 combined)")
-                            col_mask = get_scale_mask(df_ct_work, c, logic)
-                            short_suffix = logic.split(" (")[0]
-                            c_label = f"{c} ({short_suffix})"
+                            mask = get_scale_mask(df_ct_work, c, logic)
+                            c_label = f"{c} ({logic.split(' (')[0]})"
                         else:
-                            col_mask = df_ct_work[c] == 1
+                            mask = df_ct_work[c] == 1
                             c_label = c
                             
-                        col_weighted = get_unique_wgt(df_ct_work, col_mask)
-                        col_baselines[c] = {"mask": col_mask, "label": c_label}
+                        # Vector calculation perfectly tracks unique respondents on wide data
+                        col_weighted = df_ct_work.loc[mask, 'Weight'].sum()
+                        col_masks[c] = {"mask": mask, "label": c_label}
                         universe_row.extend([col_weighted, 1.00, 1.00, 100])
                         
                     export_data.append(universe_row)
                     
+                    # Process Row Vectors Matrix
                     for r in ct_rows:
-                        if r == "Total Population": continue
+                        if r == base_col_name: continue
                         is_scale = (("Psycho]" in r) and ("Core Value" not in r)) or ("Kids Attitudes]" in r)
                         if is_scale:
                             logic = ct_logic_dict.get(r, "Any Agree (1 or 2 combined)")
                             r_mask = get_scale_mask(df_ct_work, r, logic)
-                            short_suffix = logic.split(" (")[0]
-                            r_label = f"{r} ({short_suffix})"
+                            r_label = f"{r} ({logic.split(' (')[0]})"
                         else:
                             r_mask = df_ct_work[r] == 1
                             r_label = r
                             
                         r_valid_mask = df_ct_valid[r] == 1
                         
-                        stmt_weighted = get_unique_wgt(df_ct_work, r_mask)
-                        r_valid_weighted = get_unique_wgt(df_ct_work, r_valid_mask)
+                        stmt_weighted = df_ct_work.loc[r_mask, 'Weight'].sum()
+                        r_valid_weighted = df_ct_work.loc[r_valid_mask, 'Weight'].sum()
                         stmt_vert_pct = (stmt_weighted / r_valid_weighted) if r_valid_weighted > 0 else 0
                         
                         r_data = [r_label]
                         for c in ct_cols:
-                            c_mask = col_baselines[c]["mask"]
+                            c_mask = col_masks[c]["mask"]
                             cross_mask = r_mask & c_mask
-                            
-                            cross_weighted = get_unique_wgt(df_ct_work, cross_mask)
+                            cross_weighted = df_ct_work.loc[cross_mask, 'Weight'].sum()
                             
                             valid_for_cell_mask = c_mask & r_valid_mask
-                            cell_base_wgt = get_unique_wgt(df_ct_work, valid_for_cell_mask)
+                            cell_base_wgt = df_ct_work.loc[valid_for_cell_mask, 'Weight'].sum()
                             
                             vert_pct = (cross_weighted / cell_base_wgt) if cell_base_wgt > 0 else 0
                             horz_pct = (cross_weighted / stmt_weighted) if stmt_weighted > 0 else 0
@@ -775,10 +764,11 @@ if uploaded_file:
                             r_data.extend([cross_weighted, vert_pct, horz_pct, int(round(idx_score, 0))])
                         export_data.append(r_data)
                     
+                    # Layout Configuration Summary Header
                     preview_headers = ["Statement"]
                     metrics = ["Count", "Vertical(%)", "Horizontal(%)", "Index"]
                     for c in ct_cols:
-                        c_display = col_baselines[c]["label"]
+                        c_display = col_masks[c]["label"]
                         for m in metrics: preview_headers.append(f"{c_display} - {m}")
                             
                     df_preview = pd.DataFrame(export_data, columns=preview_headers).set_index("Statement")
@@ -795,7 +785,7 @@ if uploaded_file:
                     excel_headers = ["Statement"] 
                     excel_sub_headers = [""]
                     for c in ct_cols:
-                        c_display = col_baselines[c]["label"]
+                        c_display = col_masks[c]["label"]
                         excel_headers.extend([c_display, "", "", ""])
                         excel_sub_headers.extend(["Count", "Vertical(%)", "Horizontal(%)", "Index"])
                         
@@ -809,7 +799,7 @@ if uploaded_file:
                             ["CROSSTAB TITLE : Universal Crosstabs"], 
                             ["STUDY NAME : Advanced Market Mapper"], 
                             ["SELECTED BASE : Dynamic Question-Level Auto-Base (N sizes automatically adjust to exclude skipped respondents)"], 
-                            [f"WEIGHT TYPE : {'Stacked / Unique Respondent Base' if (use_stacking and stack_cols) else 'Weighted Population'}"]
+                            [f"WEIGHT TYPE : {'Dynamic Stacked Base (Unique Selected Respondents)' if (use_stacking and stack_cols) else 'Weighted Population'}"]
                         ]).to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
                         
                         df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
@@ -825,9 +815,6 @@ if uploaded_file:
                     output.seek(0)
                     st.download_button(label="📥 Download MRI-Formatted Excel Crosstab", data=output, file_name="Universal_Crosstab.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
                     
-                    # MEMORY FIX: Clear large temporary frames after crosstab generation
-                    del df_ct_work
-                    del df_ct_valid
                     gc.collect()
 
 else: st.info("⬅️ Please upload the Master Data File in the sidebar to begin.")
