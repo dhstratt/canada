@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+import matplotlib.subplots as plt
 import io
 import pickle
 
@@ -90,15 +90,20 @@ SCALE_OPTIONS = [
 # =====================================================================
 # UI HELPERS
 # =====================================================================
+def add_to_selection(key_prefix, item):
+    """Callback to append items to the cart BEFORE the app re-renders."""
+    if item not in st.session_state[f"{key_prefix}_selections"]:
+        st.session_state[f"{key_prefix}_selections"].append(item)
+
 def render_checkbox_search(key_prefix, label, options, default_selection=None):
-    """Renders a dynamic search bar that produces interactive checkboxes for rapid multi-selection."""
+    """Renders a dynamic search bar that produces optimized buttons for rapid multi-selection."""
     if f"{key_prefix}_selections" not in st.session_state:
         st.session_state[f"{key_prefix}_selections"] = default_selection if default_selection else []
         
     selected = st.multiselect(f"🛒 **{label}:**", options, default=st.session_state[f"{key_prefix}_selections"], key=f"{key_prefix}_ms")
     st.session_state[f"{key_prefix}_selections"] = selected
     
-    search_query = st.text_input(f"🔍 Search {label} (Check boxes to add):", key=f"{key_prefix}_search")
+    search_query = st.text_input(f"🔍 Search {label} (Click ➕ to add):", key=f"{key_prefix}_search")
     
     if search_query:
         matches = [o for o in options if search_query.lower() in o.lower() and o not in selected]
@@ -107,9 +112,14 @@ def render_checkbox_search(key_prefix, label, options, default_selection=None):
             grid_cols = st.columns(3)
             for i, match in enumerate(matches[:60]): 
                 with grid_cols[i % 3]:
-                    if st.checkbox(match, key=f"{key_prefix}_chk_{match}"):
-                        st.session_state[f"{key_prefix}_selections"].append(match)
-                        st.rerun()
+                    display_text = f"➕ {match[:45]}..." if len(match) > 45 else f"➕ {match}"
+                    st.button(
+                        display_text, 
+                        key=f"{key_prefix}_btn_{match}", 
+                        on_click=add_to_selection, 
+                        args=(key_prefix, match),
+                        use_container_width=True
+                    )
         else:
             st.caption("No new matches found.")
             
@@ -445,7 +455,7 @@ if uploaded_file:
     tab1, tab2, tab3 = st.tabs(["🛠️ Definition Builder & Sizing", "📊 Universal Crosstabs", "🗺️ Landscape Map"])
     
     # -------------------------------------------------------------
-    # TAB 1: DEFINITION BUILDER & SIZING
+    # TAB 1: DEFINITION BUILDER & Sizing
     # -------------------------------------------------------------
     with tab1:
         st.subheader("Create a Custom Definition")
@@ -600,6 +610,16 @@ if uploaded_file:
             stack_cols = render_checkbox_search("stack_cols", "Variables to Stack", all_vars_for_selection)
             if stack_cols:
                 st.info(f"Will stack {len(stack_cols)} variables. Unselected demographic and psychographic variables will be duplicated for each stacked event.")
+                
+                # Dynamic Preview for Stacked Event Base
+                preview_df = st.session_state['df_working'][['Weight'] + stack_cols]
+                preview_melted = pd.melt(preview_df, id_vars=['Weight'], value_vars=stack_cols, value_name="Stacked_Match")
+                valid_preview = preview_melted["Stacked_Match"].notna() & (preview_melted["Stacked_Match"] != 0)
+                
+                unweighted_events = valid_preview.sum()
+                weighted_events = preview_melted.loc[valid_preview, 'Weight'].sum()
+                
+                st.success(f"🥞 **Stacked Base Preview:** {unweighted_events:,.0f} Unweighted Events | **{weighted_events:,.0f} Weighted Events**")
 
         st.markdown("---")
         st.markdown("### Columns")
