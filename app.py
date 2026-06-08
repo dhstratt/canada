@@ -171,7 +171,6 @@ def load_and_prep_data(file):
     
     weight_col = next((c for c in df.columns if c.lower() == 'weight'), None)
     
-    # MEMORY OPTIMIZATION: Use float32 instead of float64 for weights
     if weight_col: 
         df_clean['Weight'] = pd.to_numeric(df[weight_col], errors='coerce').fillna(1.0).astype('float32')
         df_valid['Weight'] = df_clean['Weight']
@@ -179,7 +178,6 @@ def load_and_prep_data(file):
         df_clean['Weight'] = np.float32(1.0)
         df_valid['Weight'] = np.float32(1.0)
 
-    # MEMORY OPTIMIZATION: Downcast integer flags to int8
     def add_var(name, val_series, valid_mask):
         df_clean[name] = val_series.astype('int8')
         df_valid[name] = valid_mask.astype('int8')
@@ -613,20 +611,18 @@ if uploaded_file:
                         st.rerun()
 
         st.markdown("---")
-        st.markdown("### 🥞 Dynamic Data Stacking (Optional)")
-        st.markdown("Use this to group multiple variables (e.g., all brands from Q1) into a single response block. The crosstab will automatically replace 'Total Population' with '**Total Stacked Base**', calculating percentages ONLY against unique people who actually selected options within this group.")
+        st.markdown("### 🥞 Dynamic Universe Base (Optional)")
+        st.markdown("Use this to restrict the entire crosstab to a specific subset of people (e.g., Only buyers of Q1 brands). The crosstab will automatically replace 'Total Population' with your Custom Base, and all columns will only calculate percentages against these unique people.")
         
-        use_stacking = st.checkbox("Enable Dynamic Stacking", key="use_stacking")
-        stack_cols = []
-        if use_stacking:
-            stack_cols = render_checkbox_search("stack_cols", "Variables to Stack", all_vars_for_selection)
-            if stack_cols:
-                # Preview Engine: Counts unique people via horizontal vectorized check
-                person_mask = (st.session_state['df_working'][stack_cols].notna() & (st.session_state['df_working'][stack_cols] != 0)).any(axis=1)
+        use_custom_base = st.checkbox("Enable Custom Universe Base", key="use_custom_base")
+        base_cols = []
+        if use_custom_base:
+            base_cols = render_checkbox_search("base_cols", "Variables to Define Base", all_vars_for_selection)
+            if base_cols:
+                person_mask = (st.session_state['df_working'][base_cols].notna() & (st.session_state['df_working'][base_cols] != 0)).any(axis=1)
                 unweighted_people = person_mask.sum()
                 weighted_people = st.session_state['df_working'].loc[person_mask, 'Weight'].sum()
-                
-                st.success(f"🥞 **Total Stacked Base Preview:** {unweighted_people:,.0f} Unweighted Unique People | **{weighted_people:,.0f} Weighted Unique People**")
+                st.success(f"🎯 **Custom Base Preview:** {unweighted_people:,.0f} Unweighted Unique People | **{weighted_people:,.0f} Weighted Unique People**")
 
         st.markdown("---")
         st.markdown("### Columns")
@@ -676,22 +672,20 @@ if uploaded_file:
         if ct_rows and (raw_ct_cols or st.session_state['created_definitions']):
             st.markdown("---")
             if st.button("📊 Calculate & Generate Crosstab", type="primary"):
-                with st.spinner("Crunching vectors..."):
+                with st.spinner("Crunching matrices..."):
                     
-                    df_ct_work = st.session_state['df_working']
-                    df_ct_valid = st.session_state['df_valid']
+                    df_ct_work = st.session_state['df_working'].copy()
                     
-                    # Set the primary base column dynamically based on user selection
-                    if use_stacking and stack_cols:
-                        base_col_name = "Total Stacked Base"
-                        base_mask = (df_ct_work[stack_cols].notna() & (df_ct_work[stack_cols] != 0)).any(axis=1)
-                        # We temporarily attach this to the working dataframe so the get_scale_mask logic processes it natively
-                        df_ct_work = df_ct_work.assign(**{base_col_name: base_mask.astype('int8')})
-                        df_ct_valid = df_ct_valid.assign(**{base_col_name: np.ones(len(df_ct_valid), dtype='int8')})
+                    # Apply Custom Base Filter IF toggled
+                    if use_custom_base and base_cols:
+                        base_col_name = "Total Custom Base"
+                        base_mask = (df_ct_work[base_cols].notna() & (df_ct_work[base_cols] != 0)).any(axis=1)
+                        
+                        df_ct_work = df_ct_work[base_mask].copy()
+                        df_ct_work = df_ct_work.assign(**{base_col_name: np.ones(len(df_ct_work), dtype='int8')})
                     else:
                         base_col_name = "Total Population"
                         df_ct_work = df_ct_work.assign(**{base_col_name: np.ones(len(df_ct_work), dtype='int8')})
-                        df_ct_valid = df_ct_valid.assign(**{base_col_name: np.ones(len(df_ct_valid), dtype='int8')})
 
                     ct_cols = [base_col_name] + list(dict.fromkeys([x for x in raw_ct_cols if x]))
 
@@ -709,7 +703,7 @@ if uploaded_file:
                     universe_row = ["Column Base (N)"]
                     col_masks = {}
                     
-                    # Process Column Vectors
+                    # Standard Top-Line Math: Store Column Mask and Total Column Weight
                     for c in ct_cols:
                         is_scale = (("Psycho]" in c) and ("Core Value" not in c)) or ("Kids Attitudes]" in c)
                         if c == base_col_name:
@@ -723,14 +717,15 @@ if uploaded_file:
                             mask = df_ct_work[c] == 1
                             c_label = c
                             
-                        # Vector calculation perfectly tracks unique respondents on wide data
                         col_weighted = df_ct_work.loc[mask, 'Weight'].sum()
-                        col_masks[c] = {"mask": mask, "label": c_label}
+                        col_masks[c] = {"mask": mask, "label": c_label, "col_base_weight": col_weighted}
                         universe_row.extend([col_weighted, 1.00, 1.00, 100])
                         
                     export_data.append(universe_row)
                     
-                    # Process Row Vectors Matrix
+                    # The definitive base for all Index calculations
+                    total_col_base = col_masks[base_col_name]["col_base_weight"]
+                    
                     for r in ct_rows:
                         if r == base_col_name: continue
                         is_scale = (("Psycho]" in r) and ("Core Value" not in r)) or ("Kids Attitudes]" in r)
@@ -742,29 +737,28 @@ if uploaded_file:
                             r_mask = df_ct_work[r] == 1
                             r_label = r
                             
-                        r_valid_mask = df_ct_valid[r] == 1
-                        
+                        # Standard Row Total Base Calculation
                         stmt_weighted = df_ct_work.loc[r_mask, 'Weight'].sum()
-                        r_valid_weighted = df_ct_work.loc[r_valid_mask, 'Weight'].sum()
-                        stmt_vert_pct = (stmt_weighted / r_valid_weighted) if r_valid_weighted > 0 else 0
+                        stmt_vert_pct = (stmt_weighted / total_col_base) if total_col_base > 0 else 0
                         
                         r_data = [r_label]
                         for c in ct_cols:
                             c_mask = col_masks[c]["mask"]
+                            c_base_wgt = col_masks[c]["col_base_weight"]
+                            
                             cross_mask = r_mask & c_mask
                             cross_weighted = df_ct_work.loc[cross_mask, 'Weight'].sum()
                             
-                            valid_for_cell_mask = c_mask & r_valid_mask
-                            cell_base_wgt = df_ct_work.loc[valid_for_cell_mask, 'Weight'].sum()
-                            
-                            vert_pct = (cross_weighted / cell_base_wgt) if cell_base_wgt > 0 else 0
+                            # MATHEMATICALLY CORRECT PERCENTAGES
+                            # Vertical % = Intersection Count / Column Total
+                            # Horizontal % = Intersection Count / Row Total
+                            vert_pct = (cross_weighted / c_base_wgt) if c_base_wgt > 0 else 0
                             horz_pct = (cross_weighted / stmt_weighted) if stmt_weighted > 0 else 0
                             idx_score = (vert_pct / stmt_vert_pct * 100) if stmt_vert_pct > 0 else 0
                             
                             r_data.extend([cross_weighted, vert_pct, horz_pct, int(round(idx_score, 0))])
                         export_data.append(r_data)
                     
-                    # Layout Configuration Summary Header
                     preview_headers = ["Statement"]
                     metrics = ["Count", "Vertical(%)", "Horizontal(%)", "Index"]
                     for c in ct_cols:
@@ -799,7 +793,7 @@ if uploaded_file:
                             ["CROSSTAB TITLE : Universal Crosstabs"], 
                             ["STUDY NAME : Advanced Market Mapper"], 
                             ["SELECTED BASE : Dynamic Question-Level Auto-Base (N sizes automatically adjust to exclude skipped respondents)"], 
-                            [f"WEIGHT TYPE : {'Dynamic Stacked Base (Unique Selected Respondents)' if (use_stacking and stack_cols) else 'Weighted Population'}"]
+                            [f"WEIGHT TYPE : {'Custom Universe Base (Filtered Respondents)' if (use_custom_base and base_cols) else 'Weighted Population'}"]
                         ]).to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
                         
                         df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
@@ -815,6 +809,7 @@ if uploaded_file:
                     output.seek(0)
                     st.download_button(label="📥 Download MRI-Formatted Excel Crosstab", data=output, file_name="Universal_Crosstab.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
                     
+                    del df_ct_work
                     gc.collect()
 
 else: st.info("⬅️ Please upload the Master Data File in the sidebar to begin.")
