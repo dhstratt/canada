@@ -88,6 +88,35 @@ SCALE_OPTIONS = [
 ]
 
 # =====================================================================
+# UI HELPERS
+# =====================================================================
+def render_checkbox_search(key_prefix, label, options, default_selection=None):
+    """Renders a dynamic search bar that produces interactive checkboxes for rapid multi-selection."""
+    if f"{key_prefix}_selections" not in st.session_state:
+        st.session_state[f"{key_prefix}_selections"] = default_selection if default_selection else []
+        
+    selected = st.multiselect(f"🛒 **{label}:**", options, default=st.session_state[f"{key_prefix}_selections"], key=f"{key_prefix}_ms")
+    st.session_state[f"{key_prefix}_selections"] = selected
+    
+    search_query = st.text_input(f"🔍 Search to find and add variables to {label} (Check boxes to add):", key=f"{key_prefix}_search")
+    
+    if search_query:
+        matches = [o for o in options if search_query.lower() in o.lower() and o not in selected]
+        if matches:
+            st.caption(f"Found {len(matches)} matches:")
+            grid_cols = st.columns(3)
+            for i, match in enumerate(matches[:60]): 
+                with grid_cols[i % 3]:
+                    # Clicking the checkbox adds the item and instantly reruns to clear the search result
+                    if st.checkbox(match, key=f"{key_prefix}_chk_{match}"):
+                        st.session_state[f"{key_prefix}_selections"].append(match)
+                        st.rerun()
+        else:
+            st.caption("No new matches found.")
+            
+    return st.session_state[f"{key_prefix}_selections"]
+
+# =====================================================================
 # SCALE MASK EVALUATION ENGINE
 # =====================================================================
 def get_scale_mask(df, var, logic):
@@ -535,8 +564,7 @@ if uploaded_file:
             st.markdown("Instantly combine variables to use in your crosstabs without leaving this tab. *(Note: Any 1-4 scale Attitudes selected here will automatically be evaluated as 'Any Agree').*")
             qc_cols = st.columns([3, 1, 2])
             
-            # Using all_vars_for_selection to allow combining existing Saved Definitions
-            with qc_cols[0]: qc_vars = st.multiselect("Select Variables to Combine:", all_vars_for_selection, key="qc_vars")
+            with qc_cols[0]: qc_vars = render_checkbox_search("qc_vars", "Variables to Combine", all_vars_for_selection)
             with qc_cols[1]: qc_logic = st.radio("Combine Using:", ["AND (Must meet ALL)", "OR (Must meet ANY)"], key="qc_logic")
             with qc_cols[2]:
                 qc_name = st.text_input("Name this Combination:", "New Combined Var", key="qc_name")
@@ -577,7 +605,7 @@ if uploaded_file:
 
         st.markdown("---")
         st.markdown("### Columns")
-        col_search_all = st.multiselect("🔍 Universal Search (Type a keyword, brand, or Q-number):", all_vars_for_selection, key="c_search_all")
+        col_search_all = render_checkbox_search("col_main", "Selected Column Variables", all_vars_for_selection)
         
         with st.expander("📂 Or Browse by Category (Columns)", expanded=False):
             c_col1, c_col2, c_col3, c_col4 = st.columns(4)
@@ -591,7 +619,7 @@ if uploaded_file:
             with ex_c2: col_favs = st.multiselect("Rejectors & Favs", CAT_FAVS, key="c_favs")
             with ex_c3: col_chan = st.multiselect("Channels & Occasions", CAT_CHANNELS, key="c_chan")
             with ex_c4: col_reas = st.multiselect("Drivers & Perceptions", CAT_REASONS + CAT_PERCEPTIONS, key="c_reas")
-            col_defs = st.multiselect("Saved Definitions", st.session_state['created_definitions'], default=st.session_state['created_definitions'], key="c_defs")
+            col_defs = st.multiselect("Saved Definitions", st.session_state['created_definitions'], key="c_defs")
             if CAT_RAW: col_raw = st.multiselect("Raw Variables", CAT_RAW, key="c_raw")
             else: col_raw = []
 
@@ -599,7 +627,7 @@ if uploaded_file:
         
         st.markdown("---")
         st.markdown("### Rows")
-        row_search_all = st.multiselect("🔍 Universal Search (Type a keyword, brand, or Q-number):", all_vars_for_selection, key="r_search_all")
+        row_search_all = render_checkbox_search("row_main", "Selected Row Variables", all_vars_for_selection)
         
         with st.expander("📂 Or Browse by Category (Rows)", expanded=False):
             r_col1, r_col2, r_col3, r_col4 = st.columns(4)
