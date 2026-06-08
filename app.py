@@ -182,7 +182,7 @@ def load_and_prep_data(file):
         df_clean['Weight'] = np.float32(1.0)
         df_valid['Weight'] = np.float32(1.0)
 
-    # MEMORY OPTIMIZATION: Downcast integer flags to int8 (saves 87% memory per column)
+    # MEMORY OPTIMIZATION: Downcast integer flags to int8
     def add_var(name, val_series, valid_mask):
         df_clean[name] = val_series.astype('int8')
         df_valid[name] = valid_mask.astype('int8')
