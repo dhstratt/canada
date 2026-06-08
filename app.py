@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import io
 import pickle
+import gc
 
 # =====================================================================
 # INITIAL SETUP & PAGE CONFIG
@@ -129,7 +129,7 @@ def render_checkbox_search(key_prefix, label, options, default_selection=None):
     return selected
 
 # =====================================================================
-# SCALE MASK EVALUATION ENGINE
+# MATH & LOGIC HELPERS
 # =====================================================================
 def get_scale_mask(df, var, logic):
     """Dynamically generates a boolean index mask for processing 1-4 scale survey items."""
@@ -155,6 +155,12 @@ def get_scale_mask(df, var, logic):
         return series == 0
     return pd.Series(False, index=df.index)
 
+def get_unique_wgt(df, mask):
+    """Calculates weight based on unique respondents to prevent stacked event-inflation."""
+    if 'Resp_ID' not in df.columns:
+        return df[mask]['Weight'].sum()
+    return df[mask].drop_duplicates(subset=['Resp_ID'])['Weight'].sum()
+
 # =====================================================================
 # DATA PROCESSING FUNCTIONS (DYNAMIC TRANSLATION ENGINE)
 # =====================================================================
@@ -168,16 +174,18 @@ def load_and_prep_data(file):
     
     weight_col = next((c for c in df.columns if c.lower() == 'weight'), None)
     
+    # MEMORY OPTIMIZATION: Use float32 instead of float64 for weights
     if weight_col: 
-        df_clean['Weight'] = pd.to_numeric(df[weight_col], errors='coerce').fillna(1.0)
+        df_clean['Weight'] = pd.to_numeric(df[weight_col], errors='coerce').fillna(1.0).astype('float32')
         df_valid['Weight'] = df_clean['Weight']
     else: 
-        df_clean['Weight'] = 1.0
-        df_valid['Weight'] = 1.0
+        df_clean['Weight'] = np.float32(1.0)
+        df_valid['Weight'] = np.float32(1.0)
 
+    # MEMORY OPTIMIZATION: Downcast integer flags to int8 (saves 87% memory per column)
     def add_var(name, val_series, valid_mask):
-        df_clean[name] = val_series
-        df_valid[name] = valid_mask.astype(int)
+        df_clean[name] = val_series.astype('int8')
+        df_valid[name] = valid_mask.astype('int8')
         
     def get_block_valid_mask(cols):
         exist_cols = [c for c in cols if c in df.columns]
@@ -455,7 +463,7 @@ if uploaded_file:
     # =====================================================================
     # MAIN WORKSPACE TABS
     # =====================================================================
-    tab1, tab2, tab3 = st.tabs(["🛠️ Definition Builder & Sizing", "📊 Universal Crosstabs", "🗺️ Landscape Map"])
+    tab1, tab2 = st.tabs(["🛠️ Definition Builder & Sizing", "📊 Universal Crosstabs"])
     
     # -------------------------------------------------------------
     # TAB 1: DEFINITION BUILDER & Sizing
@@ -671,30 +679,42 @@ if uploaded_file:
         if ct_rows and (raw_ct_cols or st.session_state['created_definitions']):
             
             # ==========================================
-            # DYNAMIC STACKING INTERCEPTOR
+            # DYNAMIC STACKING INTERCEPTOR & CALCULATOR
             # ==========================================
             df_ct_work = st.session_state['df_working'].copy()
             df_ct_valid = st.session_state['df_valid'].copy()
             
+            df_ct_work['Resp_ID'] = df_ct_work.index
+            df_ct_valid['Resp_ID'] = df_ct_valid.index
+            
+            ct_cols = ["Total Population"] + list(dict.fromkeys([x for x in raw_ct_cols if x]))
+            
             if use_stacking and stack_cols:
-                id_vars = [c for c in df_ct_work.columns if c not in stack_cols]
+                # MEMORY FIX: Slice the dataframe to ONLY the needed columns before melting
+                needed_cols = list(set(["Resp_ID", "Weight"] + ct_cols + ct_rows))
+                id_vars_work = [c for c in needed_cols if c in df_ct_work.columns and c not in stack_cols]
                 
-                df_ct_work = pd.melt(df_ct_work, id_vars=id_vars, value_vars=stack_cols, var_name="Stacked_Item", value_name="Stacked_Match")
-                df_ct_valid = pd.melt(df_ct_valid, id_vars=id_vars, value_vars=stack_cols, var_name="Stacked_Item", value_name="Stacked_Match_Valid")
+                cols_to_keep_work = id_vars_work + [c for c in stack_cols if c in df_ct_work.columns]
+                cols_to_keep_valid = id_vars_work + [c for c in stack_cols if c in df_ct_valid.columns]
+                
+                df_ct_work = df_ct_work[cols_to_keep_work]
+                df_ct_valid = df_ct_valid[cols_to_keep_valid]
+                
+                # Perform the melt on the significantly smaller dataframe
+                df_ct_work = pd.melt(df_ct_work, id_vars=id_vars_work, value_vars=stack_cols, var_name="Stacked_Item", value_name="Stacked_Match")
+                df_ct_valid = pd.melt(df_ct_valid, id_vars=id_vars_work, value_vars=stack_cols, var_name="Stacked_Item", value_name="Stacked_Match_Valid")
                 
                 valid_rows = df_ct_work["Stacked_Match"].notna() & (df_ct_work["Stacked_Match"] != 0)
                 df_ct_work = df_ct_work[valid_rows].copy()
                 df_ct_valid = df_ct_valid[valid_rows].copy()
                 
                 for sc in stack_cols:
-                    df_ct_work[sc] = (df_ct_work["Stacked_Item"] == sc).astype(int)
-                    df_ct_valid[sc] = 1 
+                    df_ct_work[sc] = np.where(df_ct_work["Stacked_Item"] == sc, df_ct_work["Stacked_Match"], np.nan)
+                    df_ct_valid[sc] = np.where(df_ct_valid["Stacked_Item"] == sc, df_ct_valid["Stacked_Match_Valid"], 0)
                     
             df_ct_work['Total Population'] = 1
             df_ct_valid['Total Population'] = 1
             # ==========================================
-
-            ct_cols = ["Total Population"] + list(dict.fromkeys([x for x in raw_ct_cols if x]))
 
             scale_vars_in_ct = [v for v in set(ct_rows + ct_cols) if (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v) or (v == "Total Population")]
             ct_logic_dict = {}
@@ -725,7 +745,7 @@ if uploaded_file:
                     col_mask = df_ct_work[c] == 1
                     c_label = c
                     
-                col_weighted = df_ct_work[col_mask]['Weight'].sum()
+                col_weighted = get_unique_wgt(df_ct_work, col_mask)
                 col_baselines[c] = {"mask": col_mask, "label": c_label}
                 universe_row.extend([col_weighted, 1.00, 1.00, 100])
                 
@@ -744,18 +764,20 @@ if uploaded_file:
                     r_label = r
                     
                 r_valid_mask = df_ct_valid[r] == 1
-                stmt_weighted = df_ct_work[r_mask]['Weight'].sum()
-                r_valid_weighted = df_ct_work[r_valid_mask]['Weight'].sum()
+                
+                stmt_weighted = get_unique_wgt(df_ct_work, r_mask)
+                r_valid_weighted = get_unique_wgt(df_ct_work, r_valid_mask)
                 stmt_vert_pct = (stmt_weighted / r_valid_weighted) if r_valid_weighted > 0 else 0
                 
                 r_data = [r_label]
                 for c in ct_cols:
                     c_mask = col_baselines[c]["mask"]
                     cross_mask = r_mask & c_mask
-                    cross_weighted = df_ct_work[cross_mask]['Weight'].sum()
+                    
+                    cross_weighted = get_unique_wgt(df_ct_work, cross_mask)
                     
                     valid_for_cell_mask = c_mask & r_valid_mask
-                    cell_base_wgt = df_ct_work[valid_for_cell_mask]['Weight'].sum()
+                    cell_base_wgt = get_unique_wgt(df_ct_work, valid_for_cell_mask)
                     
                     vert_pct = (cross_weighted / cell_base_wgt) if cell_base_wgt > 0 else 0
                     horz_pct = (cross_weighted / stmt_weighted) if stmt_weighted > 0 else 0
@@ -814,67 +836,9 @@ if uploaded_file:
             output.seek(0)
             st.download_button(label="📥 Download MRI-Formatted Excel Crosstab", data=output, file_name="Universal_Crosstab.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
             
-    # -------------------------------------------------------------
-    # TAB 3: LANDSCAPE MAP
-    # -------------------------------------------------------------
-    with tab3:
-        st.subheader("Competitive Landscape Map")
-        map_rows = render_checkbox_search("map_rows", "Core Values (Rows) to map", CAT_ATTITUDES + CAT_DEMOS, default_selection=CAT_ATTITUDES[:5])
-        map_cols = render_checkbox_search("map_cols", "Columns (Brands/Segments) to map", CAT_BRANDS + st.session_state['created_definitions'], default_selection=CAT_BRANDS[:3])
-        
-        if map_rows and map_cols:
-            scale_vars_map = [v for v in set(map_rows + map_cols) if (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v)]
-            map_logic_dict = {}
-            if scale_vars_map:
-                with st.expander("⚙️ Fine-Tune Attitude Scales (Defaults to Any Agree)", expanded=False):
-                    col_ml1, col_ml2 = st.columns(2)
-                    for i, v in enumerate(scale_vars_map):
-                        m_col = col_ml1 if i % 2 == 0 else col_ml2
-                        with m_col: map_logic_dict[v] = st.selectbox(f"{v[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"map_logic_{v}")
-        
-        if st.button("🗺️ Generate Map") and map_rows and len(map_cols) > 1:
-            map_matrix = []
-            for r in map_rows:
-                r_data = []
-                is_scale_r = (("Psycho]" in r) and ("Core Value" not in r)) or ("Kids Attitudes]" in r)
-                if is_scale_r:
-                    logic = map_logic_dict.get(r, "Any Agree (1 or 2 combined)")
-                    r_mask = get_scale_mask(st.session_state['df_working'], r, logic)
-                else: r_mask = st.session_state['df_working'][r] == 1
-                    
-                for c in map_cols:
-                    is_scale_c = (("Psycho]" in c) and ("Core Value" not in c)) or ("Kids Attitudes]" in c)
-                    if is_scale_c:
-                        logic = map_logic_dict.get(c, "Any Agree (1 or 2 combined)")
-                        c_mask = get_scale_mask(st.session_state['df_working'], c, logic)
-                    else: c_mask = st.session_state['df_working'][c] == 1
-                        
-                    val = st.session_state['df_working'][r_mask & c_mask]['Weight'].sum()
-                    r_data.append(val)
-                map_matrix.append(r_data)
-            
-            df_map = pd.DataFrame(map_matrix, index=map_rows, columns=map_cols)
-            df_map = df_map.loc[(df_map.sum(axis=1) > 0)] 
-            
-            if len(df_map) >= 2:
-                X = df_map.values.astype(float)
-                P = X / X.sum()
-                r_mass = P.sum(axis=1)
-                c_mass = P.sum(axis=0)
-                E = np.outer(r_mass, c_mass)
-                Z = (P - E) / np.sqrt(E)
-                U, D_sv, V_T = np.linalg.svd(Z, full_matrices=False)
-                
-                row_coords = np.diag(1.0 / np.sqrt(r_mass)) @ U @ np.diag(D_sv)
-                col_coords = np.diag(1.0 / np.sqrt(c_mass)) @ V_T.T @ np.diag(D_sv)
-                
-                fig, ax = plt.subplots(figsize=(10, 8))
-                ax.scatter(row_coords[:, 0], row_coords[:, 1], color='steelblue', s=60)
-                for i, txt in enumerate(df_map.index): ax.annotate(txt[:25]+"...", (row_coords[i, 0], row_coords[i, 1] + 0.005), color='darkblue', fontsize=9)
-                ax.scatter(col_coords[:, 0], col_coords[:, 1], color='crimson', marker='s', s=100)
-                for i, txt in enumerate(df_map.columns): ax.annotate(txt, (col_coords[i, 0], col_coords[i, 1] - 0.015), color='darkred', fontsize=11, weight='bold')
-                ax.axhline(0, color='black', linewidth=0.8)
-                ax.axvline(0, color='black', linewidth=0.8)
-                st.pyplot(fig)
-            else: st.warning("Not enough data overlap to calculate dimensions.")
+            # MEMORY FIX: Clear large temporary frames after crosstab generation
+            del df_ct_work
+            del df_ct_valid
+            gc.collect()
+
 else: st.info("⬅️ Please upload the Master Data File in the sidebar to begin.")
