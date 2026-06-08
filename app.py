@@ -48,7 +48,8 @@ PSYCHOGRAPHICS = {
 ETHNICITIES = {1: "Asian", 2: "Arab", 3: "Black", 4: "Caucasian/White", 5: "Latin American", 6: "Jewish", 7: "Indigenous Peoples", 8: "Other", 9: "Do not wish to reply"}
 
 DEMO_MAP = {
-    "S1": {1: "Language: English", 2: "Language: French"}, 
+    # Mapped directly to LangQuota for accurate French/English parsing
+    "LangQuota": {1: "Language: French", 2: "Language: English", "EN": "Language: English", "FR": "Language: French", "English": "Language: English", "French": "Language: French", "1.0": "Language: French", "2.0": "Language: English"}, 
     "S2": {1: "Province: AB", 2: "Province: BC", 3: "Province: MB", 4: "Province: NB", 5: "Province: NL", 7: "Province: NS", 8: "Province: NU", 9: "Province: ON", 10: "Province: PEI", 11: "Province: QC", 12: "Province: SK", 13: "Province: YT"},
     "S3": {2: "Age: 18-24", 3: "Age: 25-34", 4: "Age: 35-44", 5: "Age: 45-54", 6: "Age: 55-65"},
     "S4": {1: "Kids in HH: Yes", 2: "Kids in HH: No"},
@@ -171,7 +172,6 @@ def load_and_prep_data(file):
     
     weight_col = next((c for c in df.columns if c.lower() == 'weight'), None)
     
-    # MEMORY OPTIMIZATION: Use float32 instead of float64 for weights
     if weight_col: 
         df_clean['Weight'] = pd.to_numeric(df[weight_col], errors='coerce').fillna(1.0).astype('float32')
         df_valid['Weight'] = df_clean['Weight']
@@ -179,7 +179,6 @@ def load_and_prep_data(file):
         df_clean['Weight'] = np.float32(1.0)
         df_valid['Weight'] = np.float32(1.0)
 
-    # MEMORY OPTIMIZATION: Downcast integer flags to int8
     def add_var(name, val_series, valid_mask):
         df_clean[name] = val_series.astype('int8')
         df_valid[name] = valid_mask.astype('int8')
@@ -193,8 +192,12 @@ def load_and_prep_data(file):
     for col, value_map in DEMO_MAP.items():
         if col in df.columns:
             valid_mask = get_block_valid_mask([col])
-            s_num = pd.to_numeric(df[col], errors='coerce')
-            for val, label in value_map.items(): add_var(f"[{col} Demo] {label}", (s_num == val).astype(int), valid_mask)
+            for val, label in value_map.items():
+                if isinstance(val, str):
+                    match_series = (df[col].astype(str).str.strip().str.upper() == val.upper())
+                else:
+                    match_series = (pd.to_numeric(df[col], errors='coerce') == val)
+                add_var(f"[{col} Demo] {label}", match_series.astype(int), valid_mask)
                 
     eth_cols = [f"D6_{i}" for i in ETHNICITIES.keys() if f"D6_{i}" in df.columns]
     eth_mask = get_block_valid_mask(eth_cols) if eth_cols else pd.Series(True, index=df.index)
@@ -613,6 +616,20 @@ if uploaded_file:
                         st.rerun()
 
         st.markdown("---")
+        st.markdown("### 🥞 Dynamic Universe Base (Optional)")
+        st.markdown("Use this to restrict the entire crosstab to a specific subset of people (e.g., Only buyers of Q1 brands). The crosstab will automatically replace 'Total Population' with your Custom Base, and all columns will only calculate percentages against these unique people.")
+        
+        use_custom_base = st.checkbox("Enable Custom Universe Base", key="use_custom_base")
+        base_cols = []
+        if use_custom_base:
+            base_cols = render_checkbox_search("base_cols", "Variables to Define Base", all_vars_for_selection)
+            if base_cols:
+                person_mask = (st.session_state['df_working'][base_cols].notna() & (st.session_state['df_working'][base_cols] != 0)).any(axis=1)
+                unweighted_people = person_mask.sum()
+                weighted_people = st.session_state['df_working'].loc[person_mask, 'Weight'].sum()
+                st.success(f"🎯 **Custom Base Preview:** {unweighted_people:,.0f} Unweighted Unique People | **{weighted_people:,.0f} Weighted Unique People**")
+
+        st.markdown("---")
         st.markdown("### Columns")
         col_search_all = render_checkbox_search("col_main", "Selected Column Variables", all_vars_for_selection)
         
@@ -664,9 +681,16 @@ if uploaded_file:
                     
                     df_ct_work = st.session_state['df_working'].copy()
                     
-                    # Set standard base column logic automatically
-                    base_col_name = "Total Population"
-                    df_ct_work = df_ct_work.assign(**{base_col_name: np.ones(len(df_ct_work), dtype='int8')})
+                    # Apply Custom Base Filter IF toggled
+                    if use_custom_base and base_cols:
+                        base_col_name = "Total Custom Base"
+                        base_mask = (df_ct_work[base_cols].notna() & (df_ct_work[base_cols] != 0)).any(axis=1)
+                        
+                        df_ct_work = df_ct_work[base_mask].copy()
+                        df_ct_work = df_ct_work.assign(**{base_col_name: np.ones(len(df_ct_work), dtype='int8')})
+                    else:
+                        base_col_name = "Total Population"
+                        df_ct_work = df_ct_work.assign(**{base_col_name: np.ones(len(df_ct_work), dtype='int8')})
 
                     ct_cols = [base_col_name] + list(dict.fromkeys([x for x in raw_ct_cols if x]))
 
@@ -774,7 +798,7 @@ if uploaded_file:
                             ["CROSSTAB TITLE : Universal Crosstabs"], 
                             ["STUDY NAME : Advanced Market Mapper"], 
                             ["SELECTED BASE : Dynamic Question-Level Auto-Base (N sizes automatically adjust to exclude skipped respondents)"], 
-                            ["WEIGHT TYPE : Weighted Population"]
+                            [f"WEIGHT TYPE : {'Custom Universe Base (Filtered Respondents)' if (use_custom_base and base_cols) else 'Weighted Population'}"]
                         ]).to_excel(writer, index=False, header=False, sheet_name='Crosstab', startrow=0)
                         
                         df_excel.to_excel(writer, index=True, sheet_name='Crosstab', startrow=9)
