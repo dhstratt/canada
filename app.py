@@ -613,15 +613,14 @@ if uploaded_file:
 
         st.markdown("---")
         st.markdown("### 🥞 Dynamic Data Stacking (Optional)")
-        st.markdown("Use this to match stacked banner books. Selected variables will be melted, but the math engine will deduplicate respondents so that **Total Population = Total Unique People** (matching your banner book logic).")
+        st.markdown("Use this to match banner books structured as Multiple Response Sets. **The math engine will automatically deduplicate respondents so that Total Population = Total Unique People**, accurately calculating your Vertical Percentages and Overlaps.")
         
         use_stacking = st.checkbox("Enable Dynamic Stacking", key="use_stacking")
         stack_cols = []
         if use_stacking:
             stack_cols = render_checkbox_search("stack_cols", "Variables to Stack", all_vars_for_selection)
             if stack_cols:
-                st.info(f"Will stack {len(stack_cols)} variables. Unselected demographic and psychographic variables will be duplicated for each stacked event.")
-                
+                # Dynamic Preview for Stacked Event Base
                 preview_df = st.session_state['df_working'][['Weight'] + stack_cols]
                 preview_melted = pd.melt(preview_df, id_vars=['Weight'], value_vars=stack_cols, value_name="Stacked_Match")
                 valid_preview = preview_melted["Stacked_Match"].notna() & (preview_melted["Stacked_Match"] != 0)
@@ -679,7 +678,7 @@ if uploaded_file:
         if ct_rows and (raw_ct_cols or st.session_state['created_definitions']):
             
             # ==========================================
-            # DYNAMIC STACKING INTERCEPTOR & CALCULATOR
+            # MATH CALCULATOR (Respondent Level Multiple Response)
             # ==========================================
             df_ct_work = st.session_state['df_working'].copy()
             df_ct_valid = st.session_state['df_valid'].copy()
@@ -689,29 +688,11 @@ if uploaded_file:
             
             ct_cols = ["Total Population"] + list(dict.fromkeys([x for x in raw_ct_cols if x]))
             
-            if use_stacking and stack_cols:
-                # MEMORY FIX: Slice the dataframe to ONLY the needed columns before melting
-                needed_cols = list(set(["Resp_ID", "Weight"] + ct_cols + ct_rows))
-                id_vars_work = [c for c in needed_cols if c in df_ct_work.columns and c not in stack_cols]
-                
-                cols_to_keep_work = id_vars_work + [c for c in stack_cols if c in df_ct_work.columns]
-                cols_to_keep_valid = id_vars_work + [c for c in stack_cols if c in df_ct_valid.columns]
-                
-                df_ct_work = df_ct_work[cols_to_keep_work]
-                df_ct_valid = df_ct_valid[cols_to_keep_valid]
-                
-                # Perform the melt on the significantly smaller dataframe
-                df_ct_work = pd.melt(df_ct_work, id_vars=id_vars_work, value_vars=stack_cols, var_name="Stacked_Item", value_name="Stacked_Match")
-                df_ct_valid = pd.melt(df_ct_valid, id_vars=id_vars_work, value_vars=stack_cols, var_name="Stacked_Item", value_name="Stacked_Match_Valid")
-                
-                valid_rows = df_ct_work["Stacked_Match"].notna() & (df_ct_work["Stacked_Match"] != 0)
-                df_ct_work = df_ct_work[valid_rows].copy()
-                df_ct_valid = df_ct_valid[valid_rows].copy()
-                
-                for sc in stack_cols:
-                    df_ct_work[sc] = np.where(df_ct_work["Stacked_Item"] == sc, df_ct_work["Stacked_Match"], np.nan)
-                    df_ct_valid[sc] = np.where(df_ct_valid["Stacked_Item"] == sc, df_ct_valid["Stacked_Match_Valid"], 0)
-                    
+            # The math engine natively handles multiple response sets ("stacking") 
+            # perfectly at the unique respondent level using the wide arrays. 
+            # We bypass pd.melt here because get_unique_wgt mathematically guarantees 
+            # the bases calculate correctly, preserving accurate vertical % and overlaps.
+            
             df_ct_work['Total Population'] = 1
             df_ct_valid['Total Population'] = 1
             # ==========================================
