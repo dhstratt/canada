@@ -98,7 +98,7 @@ def render_checkbox_search(key_prefix, label, options, default_selection=None):
     selected = st.multiselect(f"🛒 **{label}:**", options, default=st.session_state[f"{key_prefix}_selections"], key=f"{key_prefix}_ms")
     st.session_state[f"{key_prefix}_selections"] = selected
     
-    search_query = st.text_input(f"🔍 Search to find and add variables to {label} (Check boxes to add):", key=f"{key_prefix}_search")
+    search_query = st.text_input(f"🔍 Search {label} (Check boxes to add):", key=f"{key_prefix}_search")
     
     if search_query:
         matches = [o for o in options if search_query.lower() in o.lower() and o not in selected]
@@ -107,7 +107,6 @@ def render_checkbox_search(key_prefix, label, options, default_selection=None):
             grid_cols = st.columns(3)
             for i, match in enumerate(matches[:60]): 
                 with grid_cols[i % 3]:
-                    # Clicking the checkbox adds the item and instantly reruns to clear the search result
                     if st.checkbox(match, key=f"{key_prefix}_chk_{match}"):
                         st.session_state[f"{key_prefix}_selections"].append(match)
                         st.rerun()
@@ -367,7 +366,6 @@ if uploaded_file:
                 else:
                     st.session_state['df_valid'] = workspace['df_valid']
                     
-                # Backwards compatibility check for older segment workspaces
                 if 'created_definitions' in workspace:
                     st.session_state['created_definitions'] = workspace['created_definitions']
                 elif 'created_segments' in workspace:
@@ -455,15 +453,15 @@ if uploaded_file:
         with col_pool:
             st.markdown("### A. Threshold Statement Pool")
             st.markdown("Select the core attitudes and behaviors that make up this mindset. Respondents must meet a minimum count of these.")
-            pool_psycho = st.multiselect("🧠 Select Attitudes & Psychographics:", options=CAT_ATTITUDES)
-            pool_other = st.multiselect("🛒 Select Brands, Demos, or Behaviors:", options=[c for c in all_cols if c not in CAT_ATTITUDES])
+            pool_psycho = render_checkbox_search("pool_psycho", "Attitudes & Psychographics", CAT_ATTITUDES)
+            pool_other = render_checkbox_search("pool_other", "Brands, Demos, or Behaviors", [c for c in all_cols if c not in CAT_ATTITUDES])
             threshold_statements = pool_psycho + pool_other
             
         with col_mand:
             st.markdown("### B. Mandatory 'AND' Rules")
             st.markdown("Select strict rules that the respondent MUST meet (e.g., Must be Female, Must drink Minute Maid).")
-            mand_psycho = st.multiselect("🧠 Mandatory Attitudes:", options=[c for c in CAT_ATTITUDES if c not in threshold_statements])
-            mand_other = st.multiselect("🛒 Mandatory Brands/Demos/Behaviors:", options=[c for c in all_cols if c not in CAT_ATTITUDES and c not in threshold_statements])
+            mand_psycho = render_checkbox_search("mand_psycho", "Mandatory Attitudes", [c for c in CAT_ATTITUDES if c not in threshold_statements])
+            mand_other = render_checkbox_search("mand_other", "Mandatory Brands/Demos/Behaviors", [c for c in all_cols if c not in CAT_ATTITUDES and c not in threshold_statements])
             mandatory_statements = mand_psycho + mand_other
         
         all_selected = list(set(threshold_statements + mandatory_statements))
@@ -599,7 +597,7 @@ if uploaded_file:
         use_stacking = st.checkbox("Enable Dynamic Stacking", key="use_stacking")
         stack_cols = []
         if use_stacking:
-            stack_cols = st.multiselect("Select variables to stack (e.g., select all Brands or Occasions):", all_vars_for_selection, key="stack_cols")
+            stack_cols = render_checkbox_search("stack_cols", "Variables to Stack", all_vars_for_selection)
             if stack_cols:
                 st.info(f"Will stack {len(stack_cols)} variables. Unselected demographic and psychographic variables will be duplicated for each stacked event.")
 
@@ -799,8 +797,8 @@ if uploaded_file:
     # -------------------------------------------------------------
     with tab3:
         st.subheader("Competitive Landscape Map")
-        map_rows = st.multiselect("Select Core Values (Rows) to map:", CAT_ATTITUDES + CAT_DEMOS, default=CAT_ATTITUDES[:5])
-        map_cols = st.multiselect("Select Columns (Brands/Segments) to map:", CAT_BRANDS + st.session_state['created_definitions'], default=CAT_BRANDS[:3])
+        map_rows = render_checkbox_search("map_rows", "Core Values (Rows) to map", CAT_ATTITUDES + CAT_DEMOS, default_selection=CAT_ATTITUDES[:5])
+        map_cols = render_checkbox_search("map_cols", "Columns (Brands/Segments) to map", CAT_BRANDS + st.session_state['created_definitions'], default_selection=CAT_BRANDS[:3])
         
         if map_rows and map_cols:
             scale_vars_map = [v for v in set(map_rows + map_cols) if (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v)]
