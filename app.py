@@ -196,7 +196,14 @@ def load_and_prep_data(file):
                     match_series = (df[col].astype(str).str.strip().str.upper() == val.upper())
                 else:
                     match_series = (pd.to_numeric(df[col], errors='coerce') == val)
-                add_var(f"[{col} Demo] {label}", match_series.astype(int), valid_mask)
+                
+                # Combine masks if multiple keys map to the same label (like 2 and 2.0 to 'English')
+                col_name = f"[{col} Demo] {label}"
+                if col_name in df_clean.columns:
+                    df_clean[col_name] = df_clean[col_name] | match_series.astype('int8')
+                else:
+                    df_clean[col_name] = match_series.astype('int8')
+                    df_valid[col_name] = valid_mask.astype('int8')
                 
     eth_cols = [f"D6_{i}" for i in ETHNICITIES.keys() if f"D6_{i}" in df.columns]
     eth_mask = get_block_valid_mask(eth_cols) if eth_cols else pd.Series(True, index=df.index)
@@ -310,9 +317,6 @@ def load_and_prep_data(file):
             s_num = pd.to_numeric(df[f"Q14_c{b_idx}"], errors='coerce')
             for r_idx, r_name in REASONS.items(): add_var(f"[Q14 Reason] {r_name} - {b_name}", (s_num == r_idx).astype(int), brand_masks[b_idx])
 
-    # -------------------------------------------------------------
-    # BRAND-AGNOSTIC AGGREGATORS (THE "ANY BRAND" FIX)
-    # -------------------------------------------------------------
     for c_idx, c_name in CHANNELS.items():
         cols = [f"Q2_r{c_idx}_c{b_idx}" for b_idx in BRANDS.keys() if f"Q2_r{c_idx}_c{b_idx}" in df.columns]
         if cols: add_var(f"[Q2 Channel] AGGREGATE: {c_name}", (df[cols].apply(pd.to_numeric, errors='coerce').fillna(0) > 0).any(axis=1).astype(int), get_block_valid_mask(cols))
@@ -715,7 +719,8 @@ if uploaded_file:
                 else: col_raw = []
 
         raw_ct_cols = col_search_all + col_demos + col_cats + col_brands + col_psycho + col_buy + col_favs + col_chan + col_reas + col_agg + col_defs + col_raw
-        
+        ct_cols_for_ui = list(dict.fromkeys([x for x in raw_ct_cols if x]))
+
         st.markdown("---")
         st.markdown("### Rows")
         row_search_all = render_checkbox_search("row_main", "Selected Row Variables", all_vars_for_selection)
@@ -743,14 +748,26 @@ if uploaded_file:
         raw_ct_rows = row_search_all + row_demos + row_cats + row_brands + row_psycho + row_buy + row_favs + row_chan + row_reas + row_agg + row_defs + row_raw
         ct_rows = list(dict.fromkeys([x for x in raw_ct_rows if x]))
         
-        if ct_rows and (raw_ct_cols or st.session_state['created_definitions']):
+        if ct_rows and (ct_cols_for_ui or st.session_state['created_definitions']):
             st.markdown("---")
+            
+            # MOVED OUTSIDE OF CALCULATE BUTTON LOGIC
+            scale_vars_in_ct = [v for v in set(ct_rows + ct_cols_for_ui) if (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v)]
+            ct_logic_dict = {}
+            if scale_vars_in_ct:
+                with st.expander("⚙️ Fine-Tune Attitude Scales for Rows & Columns (Defaults to Any Agree)", expanded=False):
+                    col_rl1, col_rl2 = st.columns(2)
+                    for i, v in enumerate(scale_vars_in_ct):
+                        t_col = col_rl1 if i % 2 == 0 else col_rl2
+                        with t_col:
+                            ct_logic_dict[v] = st.selectbox(f"{v[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"ct_logic_all_{v}")
+
+            # CALCULATE BUTTON LOGIC
             if st.button("📊 Calculate & Generate Crosstab", type="primary"):
                 with st.spinner("Crunching matrices..."):
                     
                     df_ct_work = st.session_state['df_working'].copy()
                     
-                    # Apply Custom Base Filter IF toggled
                     if use_custom_base and base_cols:
                         base_col_name = "Total Custom Base"
                         base_mask = (df_ct_work[base_cols].notna() & (df_ct_work[base_cols] != 0)).any(axis=1)
@@ -761,23 +778,12 @@ if uploaded_file:
                         base_col_name = "Total Population"
                         df_ct_work = df_ct_work.assign(**{base_col_name: np.ones(len(df_ct_work), dtype='int8')})
 
-                    ct_cols = [base_col_name] + list(dict.fromkeys([x for x in raw_ct_cols if x]))
-
-                    scale_vars_in_ct = [v for v in set(ct_rows + ct_cols) if (("Psycho]" in v) and ("Core Value" not in v)) or ("Kids Attitudes]" in v)]
-                    ct_logic_dict = {}
-                    if scale_vars_in_ct:
-                        with st.expander("⚙️ Fine-Tune Attitude Scales for Rows & Columns (Defaults to Any Agree)", expanded=False):
-                            col_rl1, col_rl2 = st.columns(2)
-                            for i, v in enumerate(scale_vars_in_ct):
-                                t_col = col_rl1 if i % 2 == 0 else col_rl2
-                                with t_col:
-                                    ct_logic_dict[v] = st.selectbox(f"{v[:40]}...", options=SCALE_OPTIONS[2:], index=0, key=f"ct_logic_all_{v}")
+                    ct_cols = [base_col_name] + ct_cols_for_ui
 
                     export_data = []
                     universe_row = ["Column Base (N)"]
                     col_masks = {}
                     
-                    # Standard Top-Line Math: Store Column Mask and Total Column Weight
                     for c in ct_cols:
                         is_scale = (("Psycho]" in c) and ("Core Value" not in c)) or ("Kids Attitudes]" in c)
                         if c == base_col_name:
@@ -797,7 +803,6 @@ if uploaded_file:
                         
                     export_data.append(universe_row)
                     
-                    # The definitive base for all Index calculations
                     total_col_base = col_masks[base_col_name]["col_base_weight"]
                     
                     for r in ct_rows:
@@ -811,7 +816,6 @@ if uploaded_file:
                             r_mask = df_ct_work[r] == 1
                             r_label = r
                             
-                        # Standard Row Total Base Calculation
                         stmt_weighted = df_ct_work.loc[r_mask, 'Weight'].sum()
                         stmt_vert_pct = (stmt_weighted / total_col_base) if total_col_base > 0 else 0
                         
@@ -823,9 +827,6 @@ if uploaded_file:
                             cross_mask = r_mask & c_mask
                             cross_weighted = df_ct_work.loc[cross_mask, 'Weight'].sum()
                             
-                            # MATHEMATICALLY CORRECT PERCENTAGES
-                            # Vertical % = Intersection Count / Column Total
-                            # Horizontal % = Intersection Count / Row Total
                             vert_pct = (cross_weighted / c_base_wgt) if c_base_wgt > 0 else 0
                             horz_pct = (cross_weighted / stmt_weighted) if stmt_weighted > 0 else 0
                             idx_score = (vert_pct / stmt_vert_pct * 100) if stmt_vert_pct > 0 else 0
